@@ -43,10 +43,16 @@ prompt: <detailed research prompt based on user's request>
 
 3. Spawn the agent with `run_in_background: true`
 
-4. Tell the user:
+4. **Critical:** Include in the agent's prompt:
+   - Instruction to write findings to `RESEARCH.md` in the current working directory
+   - The file should have a clear title, date, and structured sections
+   - Use markdown formatting with headers, bullet points, code blocks as appropriate
+
+5. Tell the user:
    - That the research is running in background
    - The task ID so they can check on it
-   - How to check results: "Use `/tasks` to see status, or I can read the output file when ready"
+   - That results will be saved to `RESEARCH.md` in their project
+   - How to check status: "Use `/tasks` to see progress"
 
 ## Example Prompts
 
@@ -54,21 +60,21 @@ prompt: <detailed research prompt based on user's request>
 ```
 Research how authentication is implemented in this codebase.
 Find: auth patterns, token handling, session management, security measures.
-Deliverable: Summary of auth architecture with file references.
+Deliverable: Write a RESEARCH.md file with a summary of auth architecture including file references.
 ```
 
 **Technology research:**
 ```
 Research best practices for implementing real-time updates in Flutter.
 Compare: WebSockets, Server-Sent Events, Firebase Realtime Database, Firestore listeners.
-Deliverable: Pros/cons table and recommendation for this project's needs.
+Deliverable: Write a RESEARCH.md file with a pros/cons table and recommendation for this project's needs.
 ```
 
 **Documentation research:**
 ```
 Research the latest Flutter 3.x navigation patterns.
 Find: go_router best practices, deep linking, typed routes.
-Deliverable: Summary with code examples applicable to this project.
+Deliverable: Write a RESEARCH.md file with a summary and code examples applicable to this project.
 ```
 
 Now spawn the background research agent for: $ARGUMENTS
