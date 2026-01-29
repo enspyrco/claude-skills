@@ -21,6 +21,47 @@ Ship the current changes with optional commit message: $ARGUMENTS
 - Auto-merge rules (e.g., only for certain file types)
 - Custom PR title/body templates
 - Skip review for certain changes (e.g., docs-only)
+- **CI configuration** (see below)
+
+### CI Configuration
+
+Control CI setup via `.claude/ship-config.md`:
+
+```markdown
+## CI Settings
+
+ci: none
+```
+
+**Options:**
+- `ci: none` - Don't create CI workflow, no CI requirement in branch protection
+- `ci: node` - Node.js template with npm test/coverage (default if `package.json` exists)
+- `ci: skip` - Don't touch CI at all (keep existing or none)
+- `ci: custom` - Use custom template defined in config (see below)
+
+**Custom CI template:**
+```markdown
+## CI Settings
+
+ci: custom
+
+### Custom CI Workflow
+\`\`\`yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+\`\`\`
+```
+
+**Defaults (no config file):**
+- If `package.json` exists → `ci: node`
+- If no `package.json` → `ci: none`
+- If `.github/workflows/` already has files → don't overwrite
 
 ## Prerequisites
 
@@ -67,9 +108,14 @@ fi
      gh api repos/$REPO/collaborators/claude-reviewer-max -X PUT -f permission=push
    ```
 
-3. **Create CI workflow** (if missing):
+3. **Create CI workflow** (based on config):
 
-   If `.github/workflows/ci.yml` doesn't exist, create it with test coverage and docs-skip:
+   Check `.claude/ship-config.md` for CI settings. If not specified, auto-detect:
+   - Has `package.json` → use Node.js template
+   - No `package.json` → skip CI creation
+   - `.github/workflows/` already exists → don't overwrite
+
+   **Node.js template** (ci: node):
 
    ```yaml
    name: CI
@@ -133,6 +179,8 @@ fi
    Commit this file as part of the setup.
 
 4. **Set up branch protection** (if missing):
+
+   If CI was created, require it to pass:
    ```bash
    gh api repos/$REPO/branches/$BASE_BRANCH/protection -X PUT \
      -H "Accept: application/vnd.github+json" \
@@ -144,20 +192,32 @@ fi
      -f "restrictions=null"
    ```
 
-6. **Create initialization marker:**
+   If no CI (ci: none), skip the status checks requirement:
+   ```bash
+   gh api repos/$REPO/branches/$BASE_BRANCH/protection -X PUT \
+     -H "Accept: application/vnd.github+json" \
+     -f "required_pull_request_reviews[required_approving_review_count]=1" \
+     -f "required_pull_request_reviews[dismiss_stale_reviews]=true" \
+     -f "enforce_admins=false" \
+     -f "required_status_checks=null" \
+     -f "restrictions=null"
+   ```
+
+5. **Create initialization marker:**
    ```bash
    mkdir -p .claude
    echo "initialized=$(date -Iseconds)" > .claude/ship-initialized
    echo "reviewer=claude-reviewer-max" >> .claude/ship-initialized
-   echo "ci=true" >> .claude/ship-initialized
-   git add .claude/ship-initialized .github/workflows/ci.yml
-   # Will be included in the next commit
+   echo "ci=node|none|custom|skip" >> .claude/ship-initialized
+   git add .claude/ship-initialized
+   # If CI was created, also add it:
+   git add .github/workflows/ci.yml 2>/dev/null || true
    ```
 
 **Report setup status:**
 - [x] Added claude-reviewer-max as collaborator
-- [x] Created CI workflow with docs-skip
-- [x] Enabled branch protection (1 required review + CI)
+- [x] CI: created/skipped/existing (based on config)
+- [x] Enabled branch protection (1 required review, +CI if applicable)
 - [x] Created .claude/ship-initialized marker
 
 ### Step 1: Analyze Changes
