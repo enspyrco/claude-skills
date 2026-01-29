@@ -97,23 +97,23 @@ describe('config-loader', () => {
     });
 
     it('should escape special characters in strings', async () => {
-      const template = '{"text": "{{content}}"}';
+      const template = '{"title": "{{content}}", "slides": []}';
       vi.mocked(fs.readFile).mockResolvedValue(template);
 
       const data = { content: 'Line1\nLine2' };
       const result = await loadTemplate('/path/to/template.json', data);
 
-      expect(result.text).toBe('Line1\nLine2');
+      expect(result.title).toBe('Line1\nLine2');
     });
 
     it('should join arrays with newlines', async () => {
-      const template = '{"items": "{{list}}"}';
+      const template = '{"title": "{{list}}", "slides": []}';
       vi.mocked(fs.readFile).mockResolvedValue(template);
 
       const data = { list: ['Item 1', 'Item 2', 'Item 3'] };
       const result = await loadTemplate('/path/to/template.json', data);
 
-      expect(result.items).toBe('Item 1\nItem 2\nItem 3');
+      expect(result.title).toBe('Item 1\nItem 2\nItem 3');
     });
   });
 });
