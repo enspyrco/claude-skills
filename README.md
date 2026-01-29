@@ -46,9 +46,23 @@ cp .env.example .env
 
 1. Go to https://console.cloud.google.com/apis/credentials
 2. Create a new OAuth 2.0 Client ID (Desktop app)
-3. Add `http://localhost:3847/callback` as authorized redirect URI
-4. Add credentials to `.env`
-5. Run `npm install && npm run build && npm run auth` to authenticate
+3. Enable the Google Slides API and Google Drive API for your project
+4. Add `http://localhost:3847/callback` as authorized redirect URI
+5. Add credentials to `.env`:
+   ```
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   ```
+6. Run authentication:
+   ```bash
+   cd ~/git/individuals/nickmeinhold/claude-skills
+   source .env
+   export GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+   npx claude-slides --auth
+   ```
+   This opens a browser for Google login and saves tokens to `~/.claude-slides/`
+
+**Note:** The CLI requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables to be exported. After initial auth, tokens are cached in `~/.claude-slides/` and auto-refresh.
 
 ### 3. PR Reviews (for `/review`)
 

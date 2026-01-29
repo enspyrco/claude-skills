@@ -1,0 +1,231 @@
+---
+argument-hint: [commit-message]
+description: Ship changes: commit, push, create PR, review, and merge
+---
+
+# Ship Changes
+
+Automate the full PR workflow: commit, push, create PR, review, and merge.
+
+## Your Task
+
+Ship the current changes with optional commit message: $ARGUMENTS
+
+## Local Configuration
+
+**Check for project-specific config:** If `.claude/ship-config.md` exists, read it first. It may specify:
+
+- Default base branch (if not `main`)
+- Required reviewers before merge
+- Branch naming conventions
+- Auto-merge rules (e.g., only for certain file types)
+- Custom PR title/body templates
+- Skip review for certain changes (e.g., docs-only)
+
+## Prerequisites
+
+Source environment variables:
+
+```bash
+source ~/git/individuals/nickmeinhold/claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+```
+
+Get repo info:
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+BASE_BRANCH=$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name')
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+```
+
+## Workflow
+
+### Step 1: Analyze Changes
+
+Check what needs to be committed:
+
+```bash
+git status
+git diff --stat
+git diff --cached --stat
+```
+
+If there are no changes (staged or unstaged), report that there's nothing to ship and stop.
+
+### Step 2: Create Commit
+
+If there are uncommitted changes:
+
+1. Stage all relevant changes (be selective - avoid secrets, large binaries)
+2. Create a commit message:
+   - Use the provided argument if given: `$ARGUMENTS`
+   - Otherwise, analyze the diff and generate a descriptive commit message
+   - Follow conventional commits format: `type(scope): description`
+
+```bash
+git add -A  # or specific files
+git commit -m "$(cat <<'EOF'
+commit message here
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+### Step 3: Push to Remote
+
+Ensure the branch is pushed:
+
+```bash
+# Check if branch has upstream
+if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null; then
+  git push -u origin $CURRENT_BRANCH
+else
+  git push
+fi
+```
+
+### Step 4: Create Pull Request
+
+Check if a PR already exists for this branch:
+
+```bash
+EXISTING_PR=$(gh pr view --json number -q '.number' 2>/dev/null || echo "")
+```
+
+If no PR exists, create one:
+
+```bash
+gh pr create --title "PR title based on changes" --body "$(cat <<'EOF'
+## Summary
+- Brief description of changes
+
+## Test plan
+- [ ] Tests pass
+- [ ] Manual verification
+
+Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"
+```
+
+Get the PR number:
+
+```bash
+PR_NUMBER=$(gh pr view --json number -q '.number')
+```
+
+### Step 5: Review the PR
+
+Wait briefly for CI to start, then perform code review:
+
+1. Fetch the PR diff:
+   ```bash
+   gh pr diff $PR_NUMBER
+   ```
+
+2. Analyze changes for:
+   - Code quality and readability
+   - Potential bugs or edge cases
+   - Security concerns
+   - Test coverage
+   - Adherence to project conventions
+
+3. Generate review verdict: APPROVE, REQUEST_CHANGES, or COMMENT
+
+4. Post the review as **claude-reviewer**:
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/reviews" \
+  -d '{
+    "body": "REVIEW_BODY_HERE",
+    "event": "APPROVE|REQUEST_CHANGES|COMMENT"
+  }'
+```
+
+### Step 6: Merge (if approved)
+
+**Only merge if the review verdict is APPROVE.**
+
+If there are blocking issues (REQUEST_CHANGES), report them and stop. The user can fix and re-run `/ship` after addressing feedback.
+
+If approved:
+
+1. Check CI status:
+   ```bash
+   gh pr checks $PR_NUMBER
+   ```
+
+2. If CI passes (or no required checks), merge:
+   ```bash
+   gh pr merge $PR_NUMBER --squash --delete-branch
+   ```
+
+3. Report success with the merged PR URL.
+
+## Output Format
+
+Report progress at each step:
+
+```markdown
+## Shipping Changes
+
+### Commit
+- [x] Staged 3 files
+- [x] Committed: "feat: add user authentication"
+
+### Push
+- [x] Pushed to origin/feature-branch
+
+### Pull Request
+- [x] Created PR #42: "feat: add user authentication"
+- URL: https://github.com/owner/repo/pull/42
+
+### Review
+- [x] Code review: APPROVE
+- Summary: Clean implementation, tests pass
+
+### Merge
+- [x] Merged PR #42 (squash)
+- [x] Deleted branch: feature-branch
+
+**Done! Changes shipped successfully.**
+```
+
+## Safety Checks
+
+Before proceeding at each step, verify:
+
+1. **Before commit:** No secrets or credentials in diff
+2. **Before push:** Confirm we're not on main/master (create feature branch if needed)
+3. **Before merge:** CI checks pass, review is APPROVE
+4. **Abort conditions:**
+   - If on protected branch without changes, stop
+   - If review finds blocking issues, stop and report
+   - If CI fails, stop and report
+
+## Edge Cases
+
+**Already on main with uncommitted changes:**
+- Create a new feature branch first
+- Name it based on the changes (e.g., `feat/add-auth`)
+
+**PR already exists:**
+- Push new commits to existing PR
+- Re-review if there are new changes
+- Proceed to merge if approved
+
+**No CLAUDE_REVIEWER_PAT:**
+- Skip the formal review posting
+- Still analyze the code and report findings
+- Proceed to merge if self-review looks good (with warning)
+
+## Interactive Mode
+
+If `$ARGUMENTS` is empty or unclear, ask the user:
+
+1. What should the commit message be?
+2. Should we auto-merge if review passes, or stop for manual approval?

@@ -82,11 +82,22 @@ src/
 
 ### Authentication
 
-OAuth tokens stored at `~/.claude-slides/tokens.json`. Credentials from `.env`:
+OAuth tokens stored at `~/.claude-slides/tokens.json`.
 
-```
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+**Setup (one-time):**
+1. Add credentials to `.env`:
+   ```
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   ```
+2. Run authentication:
+   ```bash
+   source .env
+   export GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+   npx claude-slides --auth
+   ```
+
+**Note:** The CLI requires environment variables to be exported (not just in `.env`). After initial auth, tokens auto-refresh from `~/.claude-slides/`.
 ```
 
 ### Config Modes
