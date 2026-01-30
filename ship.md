@@ -279,11 +279,27 @@ curl -s -X POST \
   }'
 ```
 
-### Step 6: Merge (if approved)
+### Step 6: Handle Review Feedback (if changes requested)
+
+**If the review verdict is REQUEST_CHANGES:**
+
+1. Report the blocking issues found
+2. Ask the user if they want to address the feedback now:
+
+   **Options:**
+   - **Yes, address now** - Run `/review-respond` to interactively handle each comment
+   - **No, I'll fix manually** - Stop and let user make changes, then re-run `/ship`
+
+3. If user chooses to address now:
+   - Execute the `/review-respond` workflow (see review-respond.md)
+   - After fixes are committed and pushed, re-request review
+   - Loop back to Step 5 (Review) to get a new verdict
+
+4. Continue to Step 7 only after receiving APPROVE
+
+### Step 7: Merge (if approved)
 
 **Only merge if the review verdict is APPROVE.**
-
-If there are blocking issues (REQUEST_CHANGES), report them and stop. The user can fix and re-run `/ship` after addressing feedback.
 
 If approved:
 
