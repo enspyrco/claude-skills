@@ -50,12 +50,12 @@ Instructions for Claude to follow...
 
 ### Skill Locations
 
-- **Source**: `~/git/individuals/nickmeinhold/claude-skills/*.md`
+- **Source**: `~/git/orgs/enspyrco/claude-skills/*.md`
 - **Symlinked to**: `~/.claude/commands/`
 
 To install skills globally:
 ```bash
-ln -s ~/git/individuals/nickmeinhold/claude-skills/*.md ~/.claude/commands/
+ln -s ~/git/orgs/enspyrco/claude-skills/*.md ~/.claude/commands/
 ```
 
 ## Claude Slides CLI
@@ -132,34 +132,48 @@ npx claude-slides --config test.json
 The `.env` file (not committed) should contain:
 
 ```bash
-# For /review skill - GitHub PAT for claude-reviewer-max bot
-CLAUDE_REVIEWER_PAT=ghp_...
+# For /review and /cage-match skills - GitHub PATs for AI reviewers
+MAXWELL_PAT=ghp_...   # MaxwellMergeSlam (Claude reviewer)
+KELVIN_PAT=ghp_...    # KelvinBitBrawler (Gemini reviewer)
+
+# For /pm skill - GitHub PAT for project management bot
+CLAUDE_PM_PAT=ghp_...
 
 # For /slides skill - Google OAuth credentials
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 ```
 
-Skills source this file automatically from `~/git/individuals/nickmeinhold/claude-skills/.env`.
+Skills source this file automatically from `~/.enspyr-claude-skills/.env`.
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
 | `/ship` | Commit, push, create PR, review, merge - full workflow |
-| `/review <pr>` | Code review a PR as claude-reviewer-max |
+| `/review <pr>` | Code review a PR as MaxwellMergeSlam (Claude) |
+| `/cage-match <pr>` | Adversarial review: Maxwell (Claude) vs Kelvin (Gemini) |
 | `/review-respond [pr]` | Respond to PR review comments with user input |
 | `/pm <action>` | Project management (issues, planning) |
 | `/slides` | Generate Google Slides presentations |
 | `/research` | Background research agent |
 
-### Review Skill Details
+### Review Skills Details
 
-The `/review` skill posts reviews using the `claude-reviewer-max` GitHub bot account.
+**`/review`** - Single reviewer (Maxwell/Claude) posts review via GitHub API.
 
-**Setup:** Add `CLAUDE_REVIEWER_PAT` to `.env` with a GitHub PAT for the bot account.
+**`/cage-match`** - Adversarial review workflow:
+1. Maxwell (Claude) reviews the PR
+2. Kelvin (Gemini CLI) reviews independently
+3. Both critique each other's reviews
+4. Both post their reviews to GitHub under their own accounts
+5. Summary of agreements/disagreements provided
 
-**Process:** Fetches PR via `gh` CLI → reads project context → runs tests → posts review via GitHub API.
+**Reviewers:**
+- **MaxwellMergeSlam** - Claude instance (uses `MAXWELL_PAT`)
+- **KelvinBitBrawler** - Gemini instance (uses `KELVIN_PAT`)
+
+**Setup:** Add both PATs to `.env`. Requires Gemini CLI installed (`brew install gemini` or similar).
 
 ## Development Workflow
 

@@ -25,7 +25,7 @@ Handle review comments on PR #$ARGUMENTS (or current branch's PR if not specifie
 Source environment variables:
 
 ```bash
-source ~/git/individuals/nickmeinhold/claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 ```
 
 Get repo and PR info:

@@ -18,7 +18,7 @@ Markdown-based skills that extend Claude Code with custom commands:
 Skills are installed by symlinking to `~/.claude/commands/`:
 
 ```bash
-ln -s ~/git/individuals/nickmeinhold/claude-skills/*.md ~/.claude/commands/
+ln -s ~/git/orgs/enspyrco/claude-skills/*.md ~/.claude/commands/
 ```
 
 ### Usage
@@ -55,7 +55,7 @@ cp .env.example .env
    ```
 6. Run authentication:
    ```bash
-   cd ~/git/individuals/nickmeinhold/claude-skills
+   cd ~/git/orgs/enspyrco/claude-skills
    source .env
    export GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
    npx claude-slides --auth
@@ -77,7 +77,7 @@ The `/review` command uses a separate GitHub account (claude-reviewer-max) to ap
 1. Add claude-reviewer-max as collaborator with Write access in repo settings
 2. Accept the invite via API:
    ```bash
-   source ~/git/individuals/nickmeinhold/claude-skills/.env
+   source ~/.enspyr-claude-skills/.env
    # List pending invites
    curl -s -H "Authorization: Bearer \$CLAUDE_REVIEWER_PAT" \
      "https://api.github.com/user/repository_invitations" | jq
