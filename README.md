@@ -10,18 +10,16 @@ Three steps to get started:
 # 1. Clone the repo
 git clone git@github.com:enspyrco/claude-skills.git
 
-# 2. Symlink skills to Claude Code
-ln -s ~/path/to/claude-skills/*.md ~/.claude/commands/
+# 2. Symlink skills to Claude Code (from repo root)
+cd claude-skills
+ln -s "$(pwd)"/*.md ~/.claude/commands/
 
 # 3. Create .env with shared PATs (get from team lead)
-mkdir -p ~/.enspyr-claude-skills
-cat > ~/.enspyr-claude-skills/.env << 'EOF'
-MAXWELL_PAT=ghp_...
-KELVIN_PAT=ghp_...
-EOF
+cp .env.example .env
+# Edit .env with actual PAT values
 ```
 
-That's it. Skills are now available as `/review`, `/ship`, `/cage-match`, etc.
+That's it. Skills are now available as `/pr-review`, `/ship`, `/cage-match`, etc.
 
 **Why symlink?** Claude Code looks for skills in `~/.claude/commands/`. Symlinking means `git pull` updates skills instantly.
 
@@ -30,7 +28,7 @@ That's it. Skills are now available as `/review`, `/ship`, `/cage-match`, etc.
 | Skill | Description |
 |-------|-------------|
 | `/ship` | Commit, push, create PR, review, and merge |
-| `/review <pr>` | Code review as MaxwellMergeSlam (Claude) |
+| `/pr-review <pr>` | Code review as MaxwellMergeSlam (Claude) |
 | `/cage-match <pr>` | Adversarial review: Maxwell vs Kelvin (Gemini) |
 | `/review-respond` | Address PR review comments |
 | `/pm` | Project management (issues, boards) |
