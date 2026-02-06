@@ -70,7 +70,7 @@ jobs:
 Source environment variables:
 
 ```bash
-source ~/git/individuals/nickmeinhold/claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 ```
 
 Get repo info:

@@ -100,12 +100,12 @@ Apply any local review criteria in addition to the standard review process.
 
 ## Posting the Review
 
-**IMPORTANT:** Always post reviews as **claude-reviewer** using the `CLAUDE_REVIEWER_PAT` environment variable.
+**IMPORTANT:** Always post reviews as **claude-reviewer** using the `MAXWELL_PAT` environment variable.
 
 First, source the environment file if not already loaded:
 
 ```bash
-source ~/git/individuals/nickmeinhold/claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 ```
 
 Then post the review using the GitHub API:
@@ -116,7 +116,7 @@ REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
 # Post review as claude-reviewer
 curl -s -X POST \
-  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
+  -H "Authorization: Bearer $MAXWELL_PAT" \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/$REPO/pulls/$1/reviews" \
   -d '{
@@ -136,7 +136,7 @@ Events:
 If a stakeholder presentation is needed, generate Google Slides summarizing the review.
 
 **Prerequisites:**
-- Run `npm install` in `~/git/individuals/nickmeinhold/claude-skills`
+- Run `npm install` in `~/git/orgs/enspyrco/claude-skills`
 - Run `npm run auth` to authenticate with Google (first time only)
 - Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables
 
@@ -173,7 +173,7 @@ If a stakeholder presentation is needed, generate Google Slides summarizing the 
 2. Generate the presentation:
 
 ```bash
-cat review-data.json | npx --prefix ~/git/individuals/nickmeinhold/claude-skills claude-slides
+cat review-data.json | npx --prefix ~/git/orgs/enspyrco/claude-skills claude-slides
 ```
 
 3. The command outputs a Google Slides URL that can be shared with stakeholders.
