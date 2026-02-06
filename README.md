@@ -1,120 +1,52 @@
 # Claude Skills
 
-Claude Code skills and tools for AI-assisted development.
+Claude Code skills for AI-assisted development.
 
-## Skills
+## Team Member Setup
 
-Markdown-based skills that extend Claude Code with custom commands:
-
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **Project Management** | `/pm` | Manage GitHub project boards, issues, and priorities |
-| **Research** | `/research` | Deep research with web search and source synthesis |
-| **Review** | `/review` | Comprehensive PR reviews with optional slide generation |
-| **Slides** | `/slides` | Generate Google Slides with AI-created content |
-
-### Installation
-
-Skills are installed by symlinking to `~/.claude/commands/`:
+Three steps to get started:
 
 ```bash
-ln -s ~/git/orgs/enspyrco/claude-skills/*.md ~/.claude/commands/
+# 1. Clone the repo
+git clone git@github.com:enspyrco/claude-skills.git
+
+# 2. Symlink skills to Claude Code
+ln -s ~/path/to/claude-skills/*.md ~/.claude/commands/
+
+# 3. Create .env with shared PATs (get from team lead)
+mkdir -p ~/.enspyr-claude-skills
+cat > ~/.enspyr-claude-skills/.env << 'EOF'
+MAXWELL_PAT=ghp_...
+KELVIN_PAT=ghp_...
+EOF
 ```
 
-**Why symlink?** Claude Code looks for custom skills in `~/.claude/commands/`. Symlinking keeps the actual files in a git repo so:
-- Changes are version controlled
-- `git pull` updates skills instantly - no copying files around
-- Skills are available globally across all your projects
+That's it. Skills are now available as `/review`, `/ship`, `/cage-match`, etc.
 
-### Usage
+**Why symlink?** Claude Code looks for skills in `~/.claude/commands/`. Symlinking means `git pull` updates skills instantly.
 
-Once installed, use skills as slash commands in Claude Code:
+## Available Skills
 
-```bash
-/pm list                           # Show project board status
-/research "topic" --depth thorough # Research a topic
-/review 123                        # Review PR #123
-/slides 5 pitch deck for my app    # Generate 5-slide presentation
-```
+| Skill | Description |
+|-------|-------------|
+| `/ship` | Commit, push, create PR, review, and merge |
+| `/review <pr>` | Code review as MaxwellMergeSlam (Claude) |
+| `/cage-match <pr>` | Adversarial review: Maxwell vs Kelvin (Gemini) |
+| `/review-respond` | Address PR review comments |
+| `/pm` | Project management (issues, boards) |
+| `/research` | Deep research with web search |
+| `/slides` | Generate Google Slides |
 
-## Setup
+## Optional Setup
 
-### 1. Create `.env` file
+### `/pm` skill
+Add `CLAUDE_PM_PAT` to your `.env` (PAT for claude-pm-enspyr account).
 
-Copy `.env.example` to `.env` and fill in the values:
+### `/slides` skill
+Requires Google OAuth setup - see `.env.example` for details.
 
-```bash
-cp .env.example .env
-```
-
-### 2. Google Slides (for `/slides`)
-
-1. Go to https://console.cloud.google.com/apis/credentials
-2. Create a new OAuth 2.0 Client ID (Desktop app)
-3. Enable the Google Slides API and Google Drive API for your project
-4. Add `http://localhost:3847/callback` as authorized redirect URI
-5. Add credentials to `.env`:
-   ```
-   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=your-client-secret
-   ```
-6. Run authentication:
-   ```bash
-   cd ~/git/orgs/enspyrco/claude-skills
-   source .env
-   export GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
-   npx claude-slides --auth
-   ```
-   This opens a browser for Google login and saves tokens to `~/.claude-slides/`
-
-**Note:** The CLI requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables to be exported. After initial auth, tokens are cached in `~/.claude-slides/` and auto-refresh.
-
-### 3. PR Reviews (for `/review`)
-
-The `/review` command uses a separate GitHub account (claude-reviewer-max) to approve PRs.
-
-1. Create a PAT at https://github.com/settings/tokens (logged in as claude-reviewer-max)
-2. Required scopes: `repo`
-3. Add to `.env`: `CLAUDE_REVIEWER_PAT=ghp_your_token_here`
-
-#### Adding claude-reviewer-max to a new repo
-
-1. Add claude-reviewer-max as collaborator with Write access in repo settings
-2. Accept the invite via API:
-   ```bash
-   source ~/.enspyr-claude-skills/.env
-   # List pending invites
-   curl -s -H "Authorization: Bearer \$CLAUDE_REVIEWER_PAT" \
-     "https://api.github.com/user/repository_invitations" | jq
-   # Accept invite (replace INVITE_ID)
-   curl -s -X PATCH -H "Authorization: Bearer \$CLAUDE_REVIEWER_PAT" \
-     "https://api.github.com/user/repository_invitations/INVITE_ID"
-   ```
-
-## Claude Slides CLI
-
-Node.js tool for generating Google Slides presentations.
-
-### Usage
-
-```bash
-npx claude-slides --config slides.json
-npx claude-slides --template review.json --data pr-data.json
-```
-
-## Project Structure
-
-```
-claude-skills/
-├── pm.md              # Project management skill
-├── research.md        # Research skill  
-├── review.md          # PR review skill
-├── slides.md          # Slides generation skill
-├── .env               # Local config (not committed)
-├── .env.example       # Template for .env
-├── src/               # Slides CLI source
-└── dist/              # Compiled output
-```
+### Admin: Setting up new repos
+If you have `ENSPYR_ADMIN_PAT`, `/ship` will automatically invite reviewers as collaborators on new repos. Team members don't need this.
 
 ## License
 
