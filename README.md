@@ -21,6 +21,11 @@ Skills are installed by symlinking to `~/.claude/commands/`:
 ln -s ~/git/orgs/enspyrco/claude-skills/*.md ~/.claude/commands/
 ```
 
+**Why symlink?** Claude Code looks for custom skills in `~/.claude/commands/`. Symlinking keeps the actual files in a git repo so:
+- Changes are version controlled
+- `git pull` updates skills instantly - no copying files around
+- Skills are available globally across all your projects
+
 ### Usage
 
 Once installed, use skills as slash commands in Claude Code:
