@@ -50,12 +50,12 @@ Instructions for Claude to follow...
 
 ### Skill Locations
 
-- **Source**: `~/git/orgs/enspyrco/claude-skills/*.md`
+- **Source**: `*.md` files in this repo root
 - **Symlinked to**: `~/.claude/commands/`
 
-To install skills globally:
+To install skills globally (from repo root):
 ```bash
-ln -s ~/git/orgs/enspyrco/claude-skills/*.md ~/.claude/commands/
+ln -s "$(pwd)"/*.md ~/.claude/commands/
 ```
 
 ## Claude Slides CLI
@@ -144,14 +144,14 @@ GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 ```
 
-Skills source this file automatically from `~/.enspyr-claude-skills/.env`.
+Skills source this file from `.env` in the repo root (or `~/.claude/commands/.env` if installed globally).
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
 | `/ship` | Commit, push, create PR, review, merge - full workflow |
-| `/review <pr>` | Code review a PR as MaxwellMergeSlam (Claude) |
+| `/pr-review <pr>` | Code review a PR as MaxwellMergeSlam (Claude) |
 | `/cage-match <pr>` | Adversarial review: Maxwell (Claude) vs Kelvin (Gemini) |
 | `/review-respond [pr]` | Respond to PR review comments with user input |
 | `/pm <action>` | Project management (issues, planning) |
@@ -160,7 +160,7 @@ Skills source this file automatically from `~/.enspyr-claude-skills/.env`.
 
 ### Review Skills Details
 
-**`/review`** - Single reviewer (Maxwell/Claude) posts review via GitHub API.
+**`/pr-review`** - Single reviewer (Maxwell/Claude) posts review via GitHub API.
 
 **`/cage-match`** - Adversarial review workflow:
 1. Maxwell (Claude) reviews the PR
