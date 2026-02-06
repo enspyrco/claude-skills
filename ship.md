@@ -103,11 +103,45 @@ fi
    gh api repos/$REPO/branches/$BASE_BRANCH/protection 2>/dev/null
    ```
 
-2. **Add claude-reviewer-max as collaborator** (if not already):
+2. **Add reviewers as collaborators** (if not already):
+
+   First check if reviewers are already collaborators:
    ```bash
-   # Check if already a collaborator
-   gh api repos/$REPO/collaborators/claude-reviewer-max 2>/dev/null || \
-     gh api repos/$REPO/collaborators/claude-reviewer-max -X PUT -f permission=push
+   MAXWELL_IS_COLLAB=$(gh api repos/$REPO/collaborators/MaxwellMergeSlam 2>/dev/null && echo "yes" || echo "no")
+   KELVIN_IS_COLLAB=$(gh api repos/$REPO/collaborators/KelvinBitBrawler 2>/dev/null && echo "yes" || echo "no")
+   ```
+
+   If reviewers need to be added and `ENSPYR_ADMIN_PAT` is available, invite and accept:
+   ```bash
+   # Invite reviewers (requires admin PAT)
+   if [ -n "$ENSPYR_ADMIN_PAT" ]; then
+     # Invite MaxwellMergeSlam
+     curl -s -X PUT \
+       -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
+       -H "Accept: application/vnd.github+json" \
+       "https://api.github.com/repos/$REPO/collaborators/MaxwellMergeSlam" \
+       -d '{"permission":"push"}'
+
+     # Invite KelvinBitBrawler
+     curl -s -X PUT \
+       -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
+       -H "Accept: application/vnd.github+json" \
+       "https://api.github.com/repos/$REPO/collaborators/KelvinBitBrawler" \
+       -d '{"permission":"push"}'
+
+     # Accept invitations
+     MAXWELL_INVITE=$(curl -s -H "Authorization: Bearer $MAXWELL_PAT" \
+       "https://api.github.com/user/repository_invitations" | jq -r ".[] | select(.repository.full_name==\"$REPO\") | .id")
+     [ -n "$MAXWELL_INVITE" ] && curl -s -X PATCH -H "Authorization: Bearer $MAXWELL_PAT" \
+       "https://api.github.com/user/repository_invitations/$MAXWELL_INVITE"
+
+     KELVIN_INVITE=$(curl -s -H "Authorization: Bearer $KELVIN_PAT" \
+       "https://api.github.com/user/repository_invitations" | jq -r ".[] | select(.repository.full_name==\"$REPO\") | .id")
+     [ -n "$KELVIN_INVITE" ] && curl -s -X PATCH -H "Authorization: Bearer $KELVIN_PAT" \
+       "https://api.github.com/user/repository_invitations/$KELVIN_INVITE"
+   else
+     echo "Note: ENSPYR_ADMIN_PAT not set. Ask a repo admin to add MaxwellMergeSlam and KelvinBitBrawler as collaborators."
+   fi
    ```
 
 3. **Create CI workflow** (based on config):
@@ -376,6 +410,11 @@ Before proceeding at each step, verify:
 - Skip the setup step
 - Warn that reviews won't be enforced
 - Still post advisory reviews and proceed
+
+**Reviewers not set up and no ENSPYR_ADMIN_PAT:**
+- Check if MaxwellMergeSlam/KelvinBitBrawler are already collaborators
+- If not, and no admin PAT available, warn user to ask repo admin
+- Reviews can still be posted but won't count for branch protection until reviewers have write access
 
 **Repo already has branch protection:**
 - Don't modify existing rules
