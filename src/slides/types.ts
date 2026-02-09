@@ -66,4 +66,6 @@ export interface SlideConfig {
   theme?: SlideTheme;
   slides: SlideDefinition[];
   presentationId?: string; // For updating existing presentations
+  append?: boolean; // Append slides to existing presentation instead of replacing
+  updateSlide?: number | "last"; // Update an existing slide in-place
 }
