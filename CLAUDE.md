@@ -151,6 +151,7 @@ Skills source this file from `.env` in the repo root (or `~/.claude/commands/.en
 | Skill | Description |
 |-------|-------------|
 | `/ship` | Commit, push, create PR, review, merge - full workflow |
+| `/ship-major-feature` | Like /ship but with dual adversarial review (cage match) |
 | `/pr-review <pr>` | Code review a PR as MaxwellMergeSlam (Claude) |
 | `/cage-match <pr>` | Adversarial review: Maxwell (Claude) vs Kelvin (Gemini) |
 | `/review-respond [pr]` | Respond to PR review comments with user input |
