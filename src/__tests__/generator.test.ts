@@ -884,6 +884,19 @@ describe("update-slide mode", () => {
     ).rejects.toThrow("Slide index 5 out of range");
   });
 
+  it("should throw if config has no slides defined", async () => {
+    const config: SlideConfig = {
+      title: "Q&A",
+      presentationId: "pres-id",
+      updateSlide: "last",
+      slides: [],
+    };
+
+    await expect(
+      generateSlidesFromConfig(mockAuth, config)
+    ).rejects.toThrow("No slides defined in config for update");
+  });
+
   it("should update background on existing slide", async () => {
     const { get, batchUpdate } = getMocks();
 

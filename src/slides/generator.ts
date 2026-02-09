@@ -168,6 +168,10 @@ async function updateSlideContent(
   const presentationId = config.presentationId!;
   const themeColors = config.theme?.colors;
   const slideTarget = config.updateSlide!;
+
+  if (!config.slides.length) {
+    throw new Error("No slides defined in config for update");
+  }
   const slideDef = config.slides[0];
 
   // Fetch presentation to find the target slide
