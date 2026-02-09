@@ -399,8 +399,13 @@ Before proceeding at each step, verify:
 - Reviews can still be posted but won't count for branch protection until reviewers have write access
 
 **Repo already has branch protection:**
-- Don't modify existing rules
-- Just add collaborator if missing
+- Don't modify existing rules, except: verify `dismiss_stale_reviews` is enabled
+- If not enabled, update it:
+  ```bash
+  DISMISS_STALE=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null | jq '.dismiss_stale_reviews')
+  ```
+  If `DISMISS_STALE` is not `true`, fetch the full existing protection config and re-PUT it with `dismiss_stale_reviews=true` (same fetch-then-replay pattern as ship-major-feature.md Pre-Step to preserve all other settings)
+- Add collaborator if missing
 - Mark as initialized
 
 ## Interactive Mode
