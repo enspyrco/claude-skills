@@ -27,10 +27,12 @@ If either is missing and `ENSPYR_ADMIN_PAT` is available, invite and accept (sam
 2. **Check branch protection requires 2 reviews:**
 
 ```bash
-CURRENT_REVIEW_COUNT=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null | jq '.required_approving_review_count')
+PR_REVIEW_CONFIG=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null)
+CURRENT_REVIEW_COUNT=$(echo "$PR_REVIEW_CONFIG" | jq '.required_approving_review_count')
+DISMISS_STALE=$(echo "$PR_REVIEW_CONFIG" | jq '.dismiss_stale_reviews')
 ```
 
-If `CURRENT_REVIEW_COUNT` is not `2`, fetch existing protection and update while preserving status checks:
+If `CURRENT_REVIEW_COUNT` is not `2` or `DISMISS_STALE` is not `true`, fetch existing protection and update while preserving status checks:
 
 ```bash
 # Fetch existing status checks config (if any)
