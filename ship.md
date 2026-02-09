@@ -284,52 +284,34 @@ PR_NUMBER=$(gh pr view --json number -q '.number')
 
 ### Step 5: Review the PR
 
-Wait briefly for CI to start, then perform code review:
-
-1. Fetch the PR diff:
-   ```bash
-   gh pr diff $PR_NUMBER
-   ```
-
-2. Analyze changes for:
-   - Code quality and readability
-   - Potential bugs or edge cases
-   - Security concerns
-   - Test coverage
-   - Adherence to project conventions
-
-3. Generate review verdict: APPROVE, REQUEST_CHANGES, or COMMENT
-
-4. Post the review as **claude-reviewer**:
+Wait briefly for CI to start, then determine the review approach based on change size:
 
 ```bash
-curl -s -X POST \
-  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/reviews" \
-  -d '{
-    "body": "REVIEW_BODY_HERE",
-    "event": "APPROVE|REQUEST_CHANGES|COMMENT"
-  }'
+CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
+CHANGED_LINES=$(gh pr diff $PR_NUMBER --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+')
 ```
 
-### Step 6: Handle Review Feedback (if changes requested)
+**If large change (10+ files or 500+ lines changed):** run `/cage-match $PR_NUMBER`
+
+**Otherwise:** run `/pr-review $PR_NUMBER`
+
+Both will post review(s) to GitHub and return a verdict (APPROVE, REQUEST_CHANGES, or COMMENT). For cage match, both reviewers must APPROVE.
+
+### Step 6: Handle Review Feedback
 
 **If the review verdict is REQUEST_CHANGES:**
 
-1. Report the blocking issues found
-2. Ask the user if they want to address the feedback now:
+1. Automatically run `/review-respond $PR_NUMBER` to address each review comment
+2. Commit and push the fixes
+3. Re-request review and loop back to Step 5
 
-   **Options:**
-   - **Yes, address now** - Run `/review-respond` to interactively handle each comment
-   - **No, I'll fix manually** - Stop and let user make changes, then re-run `/ship`
+Repeat until the review verdict is APPROVE.
 
-3. If user chooses to address now:
-   - Execute the `/review-respond` workflow (see review-respond.md)
-   - After fixes are committed and pushed, re-request review
-   - Loop back to Step 5 (Review) to get a new verdict
+**If the review verdict is APPROVE but there are suggestions:**
 
-4. Continue to Step 7 only after receiving APPROVE
+1. Show the suggestions to the user and ask if they want to address them before merging
+2. If yes, run `/review-respond $PR_NUMBER`, commit, push, and re-request review
+3. If no, continue to Step 7
 
 ### Step 7: Merge (if approved)
 
