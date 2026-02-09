@@ -9,10 +9,10 @@ Follow the `/ship` workflow (see ship.md) with the following overrides:
 
 ## Override: Branch Protection (Step 0)
 
-Require **2 approving reviews** instead of 1. Both `MaxwellMergeSlam` and `KelvinBitBrawler` must be required reviewers.
+Require **2 approving reviews** instead of 1. Both `MaxwellMergeSlam` and `KelvinBitBrawler` must be required reviewers. In ship.md Step 0, replace the `required_approving_review_count` value:
 
 ```bash
--f "required_pull_request_reviews[required_approving_review_count]=2"
+-f "required_pull_request_reviews[required_approving_review_count]=2"  # instead of =1
 ```
 
 Update the initialization marker to reflect dual review:

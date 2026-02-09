@@ -288,7 +288,7 @@ Wait briefly for CI to start, then determine the review approach based on change
 
 ```bash
 CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
-CHANGED_LINES=$(gh pr diff $PR_NUMBER --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+')
+CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.additions + .deletions')
 ```
 
 **If large change (10+ files or 500+ lines changed):** run `/cage-match $PR_NUMBER`
