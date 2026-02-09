@@ -22,11 +22,20 @@ program
   .option("-i, --input <file>", "Input JSON file for legacy review format (default: stdin)")
   .option("-o, --output <format>", "Output format: url, json", "url")
   .option("--presentation-id <id>", "Update existing presentation instead of creating new")
+  .option("--append", "Append slides to existing presentation instead of replacing")
+  .option("--update-slide <target>", "Update an existing slide in-place ('last' or slide number)")
   .action(async (options) => {
     try {
       if (options.auth) {
         await runAuthFlow();
         process.exit(0);
+      }
+
+      if (options.append && !options.presentationId) {
+        throw new Error("--append requires --presentation-id");
+      }
+      if (options.updateSlide && !options.presentationId) {
+        throw new Error("--update-slide requires --presentation-id");
       }
 
       const auth = await getAuthenticatedClient();
@@ -36,6 +45,15 @@ program
         const config = await loadConfig(options.config);
         if (options.presentationId) {
           config.presentationId = options.presentationId;
+        }
+        if (options.append) {
+          config.append = true;
+        }
+        if (options.updateSlide) {
+          config.updateSlide =
+            options.updateSlide === "last"
+              ? "last"
+              : parseInt(options.updateSlide, 10);
         }
         const result = await generateSlidesFromConfig(auth, config);
         outputResult(result, options.output);
@@ -52,6 +70,15 @@ program
         const config = await loadTemplate(options.template, data);
         if (options.presentationId) {
           config.presentationId = options.presentationId;
+        }
+        if (options.append) {
+          config.append = true;
+        }
+        if (options.updateSlide) {
+          config.updateSlide =
+            options.updateSlide === "last"
+              ? "last"
+              : parseInt(options.updateSlide, 10);
         }
         const result = await generateSlidesFromConfig(auth, config);
         outputResult(result, options.output);

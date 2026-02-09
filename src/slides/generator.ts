@@ -23,13 +23,24 @@ export async function generateSlidesFromConfig(
   auth: OAuth2Client,
   config: SlideConfig
 ): Promise<SlideGenerationResult> {
+  // Route to update-slide mode if specified
+  if (config.presentationId && config.updateSlide !== undefined) {
+    return updateSlideContent(auth, config);
+  }
+
   const slidesApi = google.slides({ version: "v1", auth });
   const themeColors = config.theme?.colors;
 
   let presentationId = config.presentationId;
+  let insertionIndexOffset = 0;
 
-  if (presentationId) {
-    // Update existing presentation
+  if (presentationId && config.append) {
+    // Append mode: keep existing slides, insert after them
+    const existing = await slidesApi.presentations.get({ presentationId });
+    const existingSlides = existing.data.slides || [];
+    insertionIndexOffset = existingSlides.length;
+  } else if (presentationId) {
+    // Replace mode: delete all existing slides then rebuild
     const existing = await slidesApi.presentations.get({ presentationId });
     const existingSlides = existing.data.slides || [];
 
@@ -65,13 +76,13 @@ export async function generateSlidesFromConfig(
   const requests: slides_v1.Schema$Request[] = [];
 
   config.slides.forEach((slide, slideIndex) => {
-    const slideId = `slide_${slideIndex}_${Date.now()}`;
+    const slideId = `slide_${slideIndex + insertionIndexOffset}_${Date.now()}`;
 
     // Create slide with BLANK layout
     requests.push({
       createSlide: {
         objectId: slideId,
-        insertionIndex: slideIndex,
+        insertionIndex: slideIndex + insertionIndexOffset,
         slideLayoutReference: { predefinedLayout: "BLANK" },
       },
     });
@@ -114,7 +125,9 @@ export async function generateSlidesFromConfig(
   const presentation = await slidesApi.presentations.get({ presentationId });
 
   presentation.data.slides?.forEach((slide, i) => {
-    if (i >= config.slides.length || !config.slides[i].notes) return;
+    const configIndex = i - insertionIndexOffset;
+    if (configIndex < 0 || configIndex >= config.slides.length) return;
+    if (!config.slides[configIndex].notes) return;
 
     const notesId =
       slide.slideProperties?.notesPage?.notesProperties?.speakerNotesObjectId;
@@ -122,7 +135,7 @@ export async function generateSlidesFromConfig(
       notesRequests.push({
         insertText: {
           objectId: notesId,
-          text: config.slides[i].notes!,
+          text: config.slides[configIndex].notes!,
           insertionIndex: 0,
         },
       });
@@ -134,6 +147,120 @@ export async function generateSlidesFromConfig(
       presentationId,
       requestBody: { requests: notesRequests },
     });
+  }
+
+  return {
+    presentationId,
+    presentationUrl: `https://docs.google.com/presentation/d/${presentationId}/edit`,
+  };
+}
+
+/**
+ * Update an existing slide's content in-place.
+ * Deletes all elements on the target slide and rebuilds from config.slides[0].
+ * Changes are visible in real-time to anyone viewing the presentation.
+ */
+async function updateSlideContent(
+  auth: OAuth2Client,
+  config: SlideConfig
+): Promise<SlideGenerationResult> {
+  const slidesApi = google.slides({ version: "v1", auth });
+  const presentationId = config.presentationId!;
+  const themeColors = config.theme?.colors;
+  const slideTarget = config.updateSlide!;
+  const slideDef = config.slides[0];
+
+  // Fetch presentation to find the target slide
+  const presentation = await slidesApi.presentations.get({ presentationId });
+  const existingSlides = presentation.data.slides || [];
+
+  if (existingSlides.length === 0) {
+    throw new Error("Presentation has no slides to update");
+  }
+
+  // Resolve target index
+  const targetIndex =
+    slideTarget === "last" ? existingSlides.length - 1 : slideTarget;
+
+  if (targetIndex < 0 || targetIndex >= existingSlides.length) {
+    throw new Error(
+      `Slide index ${targetIndex} out of range (0-${existingSlides.length - 1})`
+    );
+  }
+
+  const targetSlide = existingSlides[targetIndex];
+  const slideObjectId = targetSlide.objectId!;
+  const requests: slides_v1.Schema$Request[] = [];
+
+  // Delete all existing elements on the slide
+  const elements = targetSlide.pageElements || [];
+  for (const el of elements) {
+    if (el.objectId) {
+      requests.push({ deleteObject: { objectId: el.objectId } });
+    }
+  }
+
+  // Update background if specified
+  if (slideDef.background) {
+    const bgColor = resolveColor(slideDef.background, themeColors);
+    requests.push({
+      updatePageProperties: {
+        objectId: slideObjectId,
+        pageProperties: {
+          pageBackgroundFill: {
+            solidFill: { color: { rgbColor: bgColor } },
+          },
+        },
+        fields: "pageBackgroundFill",
+      },
+    });
+  }
+
+  // Add new elements
+  slideDef.elements.forEach((elem, elemIndex) => {
+    const elementId = `${slideObjectId}_elem_${elemIndex}_${Date.now()}`;
+    requests.push(
+      ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors)
+    );
+  });
+
+  // Apply element requests in batches
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+    const batch = requests.slice(i, i + BATCH_SIZE);
+    await slidesApi.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: batch },
+    });
+  }
+
+  // Update speaker notes (clear existing, then insert new)
+  if (slideDef.notes) {
+    const notesId =
+      targetSlide.slideProperties?.notesPage?.notesProperties
+        ?.speakerNotesObjectId;
+    if (notesId) {
+      await slidesApi.presentations.batchUpdate({
+        presentationId,
+        requestBody: {
+          requests: [
+            {
+              deleteText: {
+                objectId: notesId,
+                textRange: { type: "ALL" },
+              },
+            },
+            {
+              insertText: {
+                objectId: notesId,
+                text: slideDef.notes,
+                insertionIndex: 0,
+              },
+            },
+          ],
+        },
+      });
+    }
   }
 
   return {

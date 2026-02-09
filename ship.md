@@ -22,6 +22,7 @@ Ship the current changes with optional commit message: $ARGUMENTS
 - Custom PR title/body templates
 - Skip review for certain changes (e.g., docs-only)
 - **CI configuration** (see below)
+- **Test configuration** (see below)
 
 ### CI Configuration
 
@@ -64,6 +65,28 @@ jobs:
 - If `package.json` exists → `ci: node`
 - If neither → `ci: none`
 - If `.github/workflows/` already has files → don't overwrite
+
+### Test Configuration
+
+Control pre-commit test runs via `.claude/ship-config.md`:
+
+```markdown
+## Test Settings
+
+test-command: npm run test:coverage
+```
+
+**Options:**
+- `test-command: <command>` - Run this exact command before committing. If it exits non-zero, stop and fix.
+- `test-command: none` - Skip local tests entirely.
+
+If not specified, auto-detect:
+- Has `package.json` with a `test:coverage` script → `npm run test:coverage`
+- Has `package.json` with a `test` script (no coverage) → `npm run test`
+- Has `pubspec.yaml` → `flutter test`
+- Neither → skip
+
+Coverage thresholds are owned by the project's test runner config (e.g., `vitest.config.ts`, `jest.config.js`), not by `/ship`.
 
 ## Prerequisites
 
@@ -165,7 +188,49 @@ fi
 
    Commit the CI file as part of setup.
 
-4. **Set up branch protection** (if missing):
+4. **Configure coverage threshold:**
+
+   If CI was created (not `ci: none` or `ci: skip`), ask the user what coverage threshold they want:
+
+   > "What minimum coverage threshold should be enforced? (e.g., 50, 80, or 'none' to skip)"
+
+   If the user provides a number, configure the project's test runner:
+
+   **Vitest** (`vitest.config.ts` or `vitest.config.js`):
+   - If the file exists, add or update the `test.coverage.thresholds` section
+   - If no vitest config exists but `package.json` has vitest as a dependency, create `vitest.config.ts`:
+     ```typescript
+     import { defineConfig } from 'vitest/config';
+
+     export default defineConfig({
+       test: {
+         coverage: {
+           provider: 'v8',
+           thresholds: {
+             lines: <threshold>,
+             functions: <threshold>,
+             branches: <threshold>,
+             statements: <threshold>,
+           },
+         },
+       },
+     });
+     ```
+
+   **Jest** (`jest.config.js` or `jest.config.ts` or `package.json` jest section):
+   - Add `coverageThreshold.global` with `branches`, `functions`, `lines`, `statements` set to the threshold
+
+   **Flutter** (`pubspec.yaml` project):
+   - Coverage thresholds aren't built into `flutter test`. Note this to the user — they can use a package like `very_good_cli` or add a coverage check script to CI.
+
+   If the user says "none", skip. Store the chosen threshold in `.claude/ship-config.md`:
+   ```markdown
+   ## Test Settings
+
+   coverage-threshold: 50
+   ```
+
+5. **Set up branch protection** (if missing):
 
    If CI was created, require it to pass:
    ```bash
@@ -190,7 +255,7 @@ fi
      -f "restrictions=null"
    ```
 
-5. **Create initialization marker:**
+6. **Create initialization marker:**
    ```bash
    mkdir -p .claude
    echo "initialized=$(date -Iseconds)" > .claude/ship-initialized
@@ -219,7 +284,19 @@ git diff --cached --stat
 
 If there are no changes (staged or unstaged), report that there's nothing to ship and stop.
 
-### Step 2: Create Commit
+### Step 2: Run Tests
+
+Before committing, run the local test suite to catch failures early (avoids a CI round-trip).
+
+1. Check `.claude/ship-config.md` for `test-command` setting
+2. If not configured, auto-detect:
+   - Has `package.json` with `test:coverage` script → `npm run test:coverage`
+   - Has `package.json` with `test` script only → `npm run test`
+   - Has `pubspec.yaml` → `flutter test`
+   - `test-command: none` or nothing detected → skip
+3. Run the command. **If it exits non-zero, stop and fix before proceeding.** Do NOT commit broken code.
+
+### Step 3: Create Commit
 
 If there are uncommitted changes:
 
@@ -239,7 +316,7 @@ EOF
 )"
 ```
 
-### Step 3: Push to Remote
+### Step 4: Push to Remote
 
 Ensure the branch is pushed:
 
@@ -252,7 +329,7 @@ else
 fi
 ```
 
-### Step 4: Create Pull Request
+### Step 5: Create Pull Request
 
 Check if a PR already exists for this branch:
 
@@ -282,7 +359,7 @@ Get the PR number:
 PR_NUMBER=$(gh pr view --json number -q '.number')
 ```
 
-### Step 5: Review the PR
+### Step 6: Review the PR
 
 Wait briefly for CI to start, then determine the review approach based on change size:
 
@@ -297,13 +374,13 @@ CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.addition
 
 Both will post review(s) to GitHub and return a verdict (APPROVE, REQUEST_CHANGES, or COMMENT). For cage match, both reviewers must APPROVE.
 
-### Step 6: Handle Review Feedback
+### Step 7: Handle Review Feedback
 
 **If the review verdict is REQUEST_CHANGES:**
 
 1. Automatically run `/review-respond $PR_NUMBER` to address each review comment
 2. Commit and push the fixes
-3. Re-request review and loop back to Step 5
+3. Re-request review and loop back to Step 6
 
 Repeat until the review verdict is APPROVE.
 
@@ -311,11 +388,20 @@ Repeat until the review verdict is APPROVE.
 
 1. Show the suggestions to the user and ask if they want to address them before merging
 2. If yes, run `/review-respond $PR_NUMBER`, commit, push, and re-request review
-3. If no, continue to Step 7
+3. If no, continue to Step 9
 
-### Step 7: Merge (if approved)
+### Step 8: Pre-Merge Gate (MANDATORY)
 
-**Only merge if the review verdict is APPROVE.**
+**STOP. Do NOT skip this step. Review suggestions are often valuable.**
+
+Before merging, you MUST check:
+- If verdict is **REQUEST_CHANGES** → go back to Step 7, do NOT merge
+- If verdict is **APPROVE with suggestions** → list each suggestion to the user and ask "Do you want to address any of these before merging?" Wait for their answer. Do NOT auto-merge.
+- If verdict is **APPROVE with no suggestions** → proceed to merge
+
+### Step 9: Merge
+
+**Only merge after the pre-merge gate is satisfied.**
 
 If approved:
 
