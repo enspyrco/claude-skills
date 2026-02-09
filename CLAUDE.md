@@ -132,9 +132,12 @@ npx claude-slides --config test.json
 The `.env` file (not committed) should contain:
 
 ```bash
-# For /review and /cage-match skills - GitHub PATs for AI reviewers
+# For /ship, /pr-review, /cage-match - GitHub PATs for AI reviewers
 MAXWELL_PAT=ghp_...   # MaxwellMergeSlam (Claude reviewer)
 KELVIN_PAT=ghp_...    # KelvinBitBrawler (Gemini reviewer)
+
+# For /ship - admin PAT to invite reviewers as collaborators (optional, admin-only)
+ENSPYR_ADMIN_PAT=ghp_...
 
 # For /pm skill - GitHub PAT for project management bot
 CLAUDE_PM_PAT=ghp_...
@@ -150,7 +153,7 @@ Skills source this file from `.env` in the repo root (or `~/.claude/commands/.en
 
 | Skill | Description |
 |-------|-------------|
-| `/ship` | Commit, push, create PR, review, merge - full workflow |
+| `/ship` | Commit, push, create PR, review, merge - auto-escalates to cage match for large changes |
 | `/ship-major-feature` | Like /ship but with dual adversarial review (cage match) |
 | `/pr-review <pr>` | Code review a PR as MaxwellMergeSlam (Claude) |
 | `/cage-match <pr>` | Adversarial review: Maxwell (Claude) vs Kelvin (Gemini) |
@@ -181,11 +184,12 @@ Skills source this file from `.env` in the repo root (or `~/.claude/commands/.en
 This repo uses `/ship` for all changes:
 
 1. **Branch protection** on `main`:
-   - 1 approving review required (from `claude-reviewer-max`)
+   - 1 approving review required (2 when using `/ship-major-feature`)
+   - `dismiss_stale_reviews` enforced (ensures new commits invalidate old approvals)
    - CI must pass (tests + 50% coverage)
 
 2. **First run in a new repo**: `/ship` auto-configures:
-   - Adds `claude-reviewer-max` as collaborator
+   - Adds MaxwellMergeSlam and KelvinBitBrawler as collaborators
    - Sets up branch protection
    - Creates `.claude/ship-initialized` marker
 
