@@ -291,7 +291,7 @@ CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
 CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.additions + .deletions')
 ```
 
-**If large change (10+ files or 500+ lines changed):** run `/cage-match $PR_NUMBER`
+**If large change (10+ files or 500+ lines changed):** before reviewing, run the "Pre-Step: Ensure Dual Review Setup" from `ship-major-feature.md` to verify branch protection requires 2 reviews and both reviewer bots are collaborators. Then run `/cage-match $PR_NUMBER`
 
 **Otherwise:** run `/pr-review $PR_NUMBER`
 
