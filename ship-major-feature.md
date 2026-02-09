@@ -30,18 +30,36 @@ If either is missing and `ENSPYR_ADMIN_PAT` is available, invite and accept (sam
 CURRENT_REVIEW_COUNT=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null | jq '.required_approving_review_count')
 ```
 
-If `CURRENT_REVIEW_COUNT` is not `2`, update branch protection:
+If `CURRENT_REVIEW_COUNT` is not `2`, fetch existing protection and update while preserving status checks:
 
 ```bash
-gh api repos/$REPO/branches/$BASE_BRANCH/protection -X PUT \
-  -H "Accept: application/vnd.github+json" \
-  -f "required_pull_request_reviews[required_approving_review_count]=2" \
-  -f "required_pull_request_reviews[dismiss_stale_reviews]=true" \
-  -f "enforce_admins=false" \
-  -f "restrictions=null"
-```
+# Fetch existing status checks config (if any)
+EXISTING_CHECKS=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_status_checks 2>/dev/null)
+STRICT=$(echo "$EXISTING_CHECKS" | jq -r '.strict // false')
+CONTEXTS=$(echo "$EXISTING_CHECKS" | jq -r '.contexts[]' 2>/dev/null)
 
-Note: preserve any existing `required_status_checks` from the current protection rules when updating.
+# Build the protection update
+PROTECTION_ARGS=(
+  -X PUT
+  -H "Accept: application/vnd.github+json"
+  -f "required_pull_request_reviews[required_approving_review_count]=2"
+  -f "required_pull_request_reviews[dismiss_stale_reviews]=true"
+  -f "enforce_admins=false"
+  -f "restrictions=null"
+)
+
+# Re-include existing status checks if they exist
+if [ -n "$CONTEXTS" ]; then
+  PROTECTION_ARGS+=(-f "required_status_checks[strict]=$STRICT")
+  for ctx in $CONTEXTS; do
+    PROTECTION_ARGS+=(-f "required_status_checks[contexts][]=$ctx")
+  done
+else
+  PROTECTION_ARGS+=(-f "required_status_checks=null")
+fi
+
+gh api "repos/$REPO/branches/$BASE_BRANCH/protection" "${PROTECTION_ARGS[@]}"
+```
 
 3. **Update initialization marker:**
 
