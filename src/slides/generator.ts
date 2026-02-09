@@ -222,7 +222,7 @@ async function updateSlideContent(
 
   // Add new elements
   slideDef.elements.forEach((elem, elemIndex) => {
-    const elementId = `${slideObjectId}_elem_${elemIndex}_${Date.now()}`;
+    const elementId = `${slideObjectId}_elem_${elemIndex}`;
     requests.push(
       ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors)
     );

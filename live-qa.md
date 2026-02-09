@@ -26,7 +26,7 @@ If the config file doesn't exist, error with: "Missing .claude/live-qa-config.md
 
 ### 1. Show progress immediately
 
-The audience is waiting. Before doing any research, write a progress config to `/tmp/live-qa-slide.json` and push it to the slide:
+The audience is waiting. Before doing any research, generate a unique temp path using the PID or timestamp (e.g., `/tmp/live-qa-slide-$$.json`) and write a progress config to it:
 
 ```json
 {
@@ -58,7 +58,7 @@ The audience is waiting. Before doing any research, write a progress config to `
 
 Run immediately:
 ```bash
-npx claude-slides --config /tmp/live-qa-slide.json --presentation-id <ID> --update-slide last
+npx claude-slides --config $SLIDE_CONFIG --presentation-id <ID> --update-slide last
 ```
 
 This updates the last slide in-place. The audience sees "Researching..." appear within seconds.
@@ -69,7 +69,7 @@ Perform 1-2 targeted web searches to find a concise, accurate answer. Speed is c
 
 ### 3. Update with the answer
 
-Write the final slide config to `/tmp/live-qa-slide.json`:
+Write the final slide config to the same temp file (`$SLIDE_CONFIG`):
 
 ```json
 {
@@ -102,7 +102,7 @@ Write the final slide config to `/tmp/live-qa-slide.json`:
 
 Run:
 ```bash
-npx claude-slides --config /tmp/live-qa-slide.json --presentation-id <ID> --update-slide last
+npx claude-slides --config $SLIDE_CONFIG --presentation-id <ID> --update-slide last
 ```
 
 The audience sees "Researching..." morph into the actual answer — live, no interaction.

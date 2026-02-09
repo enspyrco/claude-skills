@@ -50,10 +50,15 @@ program
           config.append = true;
         }
         if (options.updateSlide) {
-          config.updateSlide =
-            options.updateSlide === "last"
-              ? "last"
-              : parseInt(options.updateSlide, 10);
+          if (options.updateSlide === "last") {
+            config.updateSlide = "last";
+          } else {
+            const parsed = parseInt(options.updateSlide, 10);
+            if (isNaN(parsed)) {
+              throw new Error("--update-slide must be 'last' or a number");
+            }
+            config.updateSlide = parsed;
+          }
         }
         const result = await generateSlidesFromConfig(auth, config);
         outputResult(result, options.output);
@@ -75,10 +80,15 @@ program
           config.append = true;
         }
         if (options.updateSlide) {
-          config.updateSlide =
-            options.updateSlide === "last"
-              ? "last"
-              : parseInt(options.updateSlide, 10);
+          if (options.updateSlide === "last") {
+            config.updateSlide = "last";
+          } else {
+            const parsed = parseInt(options.updateSlide, 10);
+            if (isNaN(parsed)) {
+              throw new Error("--update-slide must be 'last' or a number");
+            }
+            config.updateSlide = parsed;
+          }
         }
         const result = await generateSlidesFromConfig(auth, config);
         outputResult(result, options.output);
