@@ -17,7 +17,7 @@ npm run build
 
 # Test
 npm run test              # Run tests
-npm run test:coverage     # Run with coverage (must be ≥50%)
+npm run test:coverage     # Run with coverage (thresholds in vitest.config.ts)
 
 # CLI
 npm run auth              # Google OAuth flow
@@ -161,6 +161,7 @@ Skills source this file from `.env` in the repo root (or `~/.claude/commands/.en
 | `/pm <action>` | Project management (issues, planning) |
 | `/slides` | Generate Google Slides presentations |
 | `/research` | Background research agent |
+| `/live-qa <question>` | Live Q&A: research a question and update a slide in real-time |
 
 ### Review Skills Details
 
@@ -186,7 +187,7 @@ This repo uses `/ship` for all changes:
 1. **Branch protection** on `main`:
    - 1 approving review required (2 when using `/ship-major-feature`)
    - `dismiss_stale_reviews` enforced (ensures new commits invalidate old approvals)
-   - CI must pass (tests + 50% coverage)
+   - CI must pass (tests + coverage thresholds)
 
 2. **First run in a new repo**: `/ship` auto-configures:
    - Adds MaxwellMergeSlam and KelvinBitBrawler as collaborators
@@ -196,15 +197,13 @@ This repo uses `/ship` for all changes:
 3. **CI** (`.github/workflows/ci.yml`):
    - Runs on push and PR to main
    - Build → Test with coverage
-   - Fails if coverage < 50%
+   - Fails if coverage below thresholds (see `vitest.config.ts`)
 
 ## Testing
 
-Coverage threshold: **50% minimum** (enforced by CI)
+Coverage thresholds are defined in `vitest.config.ts` and enforced by both CI and `/ship`.
 
 ```bash
 npm run test              # Quick test run
 npm run test:coverage     # With coverage report
 ```
-
-Current coverage: ~96% on core modules (`templates.ts`, `config-loader.ts`)

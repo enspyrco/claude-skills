@@ -22,6 +22,7 @@ Ship the current changes with optional commit message: $ARGUMENTS
 - Custom PR title/body templates
 - Skip review for certain changes (e.g., docs-only)
 - **CI configuration** (see below)
+- **Test configuration** (see below)
 
 ### CI Configuration
 
@@ -64,6 +65,24 @@ jobs:
 - If `package.json` exists → `ci: node`
 - If neither → `ci: none`
 - If `.github/workflows/` already has files → don't overwrite
+
+### Test Configuration
+
+Control local test runs via `.claude/ship-config.md`:
+
+```markdown
+## Test Settings
+
+test-command: npm run test:coverage
+```
+
+**Auto-detection (if not specified):**
+- Has `package.json` with `test:coverage` script → `npm run test:coverage`
+- Has `package.json` with `test` script → `npm run test`
+- Has `pubspec.yaml` → `flutter test`
+- Otherwise → skip tests
+
+**Note:** Coverage thresholds are owned by the test runner config (e.g. `vitest.config.ts`, `jest.config.js`, `flutter_test`). The `/ship` skill delegates enforcement to the test runner's exit code.
 
 ## Prerequisites
 
@@ -190,7 +209,28 @@ fi
      -f "restrictions=null"
    ```
 
-5. **Create initialization marker:**
+5. **Configure coverage threshold** (prompt the user):
+
+   Ask the user what coverage threshold they want. Then configure the test runner:
+
+   **Vitest** (if `vitest.config.ts` exists):
+   - Update `test.coverage.thresholds` with the chosen percentage for lines, functions, branches, statements
+
+   **Jest** (if `jest.config.js`/`jest.config.ts` exists):
+   - Update `coverageThreshold.global` with the chosen percentage
+
+   **Flutter** (if `pubspec.yaml` exists):
+   - Note: Flutter doesn't have built-in thresholds. Add a note to `.claude/ship-config.md` for manual enforcement.
+
+   Store the threshold in `.claude/ship-config.md`:
+   ```markdown
+   ## Test Settings
+
+   test-command: npm run test:coverage
+   coverage-threshold: 50
+   ```
+
+6. **Create initialization marker:**
    ```bash
    mkdir -p .claude
    echo "initialized=$(date -Iseconds)" > .claude/ship-initialized
@@ -219,7 +259,25 @@ git diff --cached --stat
 
 If there are no changes (staged or unstaged), report that there's nothing to ship and stop.
 
-### Step 2: Create Commit
+### Step 2: Run Tests
+
+Before committing, run the project's test suite:
+
+1. Check `.claude/ship-config.md` for a `test-command` setting
+2. If not specified, auto-detect:
+   - Has `package.json` with `test:coverage` script → `npm run test:coverage`
+   - Has `package.json` with `test` script → `npm run test`
+   - Has `pubspec.yaml` → `flutter test`
+   - Otherwise → skip tests
+3. Run the test command and check exit code
+4. **If tests fail, STOP.** Report the failure and do not continue to commit.
+
+```bash
+# Example (auto-detected)
+npm run test:coverage
+```
+
+### Step 3: Create Commit
 
 If there are uncommitted changes:
 
@@ -239,7 +297,7 @@ EOF
 )"
 ```
 
-### Step 3: Push to Remote
+### Step 4: Push to Remote
 
 Ensure the branch is pushed:
 
@@ -252,7 +310,7 @@ else
 fi
 ```
 
-### Step 4: Create Pull Request
+### Step 5: Create Pull Request
 
 Check if a PR already exists for this branch:
 
@@ -282,7 +340,7 @@ Get the PR number:
 PR_NUMBER=$(gh pr view --json number -q '.number')
 ```
 
-### Step 5: Review the PR
+### Step 6: Review the PR
 
 Wait briefly for CI to start, then determine the review approach based on change size:
 
@@ -297,13 +355,13 @@ CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.addition
 
 Both will post review(s) to GitHub and return a verdict (APPROVE, REQUEST_CHANGES, or COMMENT). For cage match, both reviewers must APPROVE.
 
-### Step 6: Handle Review Feedback
+### Step 7: Handle Review Feedback
 
 **If the review verdict is REQUEST_CHANGES:**
 
 1. Automatically run `/review-respond $PR_NUMBER` to address each review comment
 2. Commit and push the fixes
-3. Re-request review and loop back to Step 5
+3. Re-request review and loop back to Step 6
 
 Repeat until the review verdict is APPROVE.
 
@@ -311,9 +369,9 @@ Repeat until the review verdict is APPROVE.
 
 1. Show the suggestions to the user and ask if they want to address them before merging
 2. If yes, run `/review-respond $PR_NUMBER`, commit, push, and re-request review
-3. If no, continue to Step 7
+3. If no, continue to Step 8
 
-### Step 7: Merge (if approved)
+### Step 8: Merge (if approved)
 
 **Only merge if the review verdict is APPROVE.**
 

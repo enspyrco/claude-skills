@@ -28,8 +28,20 @@ export async function generateSlidesFromConfig(
 
   let presentationId = config.presentationId;
 
-  if (presentationId) {
-    // Update existing presentation
+  // Route to update-slide mode if specified
+  if (presentationId && config.updateSlide !== undefined) {
+    return updateSlideContent(auth, config);
+  }
+
+  let insertionIndexOffset = 0;
+
+  if (presentationId && config.append) {
+    // Append mode: keep existing slides, add after them
+    const existing = await slidesApi.presentations.get({ presentationId });
+    const existingSlides = existing.data.slides || [];
+    insertionIndexOffset = existingSlides.length;
+  } else if (presentationId) {
+    // Replace mode: delete all existing slides
     const existing = await slidesApi.presentations.get({ presentationId });
     const existingSlides = existing.data.slides || [];
 
@@ -71,7 +83,7 @@ export async function generateSlidesFromConfig(
     requests.push({
       createSlide: {
         objectId: slideId,
-        insertionIndex: slideIndex,
+        insertionIndex: slideIndex + insertionIndexOffset,
         slideLayoutReference: { predefinedLayout: "BLANK" },
       },
     });
@@ -114,7 +126,8 @@ export async function generateSlidesFromConfig(
   const presentation = await slidesApi.presentations.get({ presentationId });
 
   presentation.data.slides?.forEach((slide, i) => {
-    if (i >= config.slides.length || !config.slides[i].notes) return;
+    const configIndex = i - insertionIndexOffset;
+    if (configIndex < 0 || configIndex >= config.slides.length || !config.slides[configIndex].notes) return;
 
     const notesId =
       slide.slideProperties?.notesPage?.notesProperties?.speakerNotesObjectId;
@@ -122,7 +135,7 @@ export async function generateSlidesFromConfig(
       notesRequests.push({
         insertText: {
           objectId: notesId,
-          text: config.slides[i].notes!,
+          text: config.slides[configIndex].notes!,
           insertionIndex: 0,
         },
       });
@@ -134,6 +147,118 @@ export async function generateSlidesFromConfig(
       presentationId,
       requestBody: { requests: notesRequests },
     });
+  }
+
+  return {
+    presentationId,
+    presentationUrl: `https://docs.google.com/presentation/d/${presentationId}/edit`,
+  };
+}
+
+/**
+ * Update a single slide's content in-place.
+ * Deletes all existing elements, rebuilds with new content.
+ */
+async function updateSlideContent(
+  auth: OAuth2Client,
+  config: SlideConfig
+): Promise<SlideGenerationResult> {
+  const slidesApi = google.slides({ version: "v1", auth });
+  const presentationId = config.presentationId!;
+  const themeColors = config.theme?.colors;
+
+  // Fetch current presentation
+  const existing = await slidesApi.presentations.get({ presentationId });
+  const existingSlides = existing.data.slides || [];
+
+  if (existingSlides.length === 0) {
+    throw new Error("Presentation has no slides to update");
+  }
+
+  // Resolve target slide index
+  let targetIndex: number;
+  if (config.updateSlide === "last") {
+    targetIndex = existingSlides.length - 1;
+  } else {
+    targetIndex = config.updateSlide as number;
+  }
+
+  if (targetIndex < 0 || targetIndex >= existingSlides.length) {
+    throw new Error(
+      `Slide index ${targetIndex} out of range (0-${existingSlides.length - 1})`
+    );
+  }
+
+  const targetSlide = existingSlides[targetIndex];
+  const slideId = targetSlide.objectId!;
+  const slideDef = config.slides[0]; // Update uses first slide definition
+
+  const requests: slides_v1.Schema$Request[] = [];
+
+  // Delete all existing page elements
+  const elements = targetSlide.pageElements || [];
+  for (const el of elements) {
+    if (el.objectId) {
+      requests.push({ deleteObject: { objectId: el.objectId } });
+    }
+  }
+
+  // Set background if specified
+  if (slideDef.background) {
+    const bgColor = resolveColor(slideDef.background, themeColors);
+    requests.push({
+      updatePageProperties: {
+        objectId: slideId,
+        pageProperties: {
+          pageBackgroundFill: {
+            solidFill: { color: { rgbColor: bgColor } },
+          },
+        },
+        fields: "pageBackgroundFill",
+      },
+    });
+  }
+
+  // Add new elements
+  slideDef.elements.forEach((elem, elemIndex) => {
+    const elementId = `${slideId}_update_${elemIndex}_${Date.now()}`;
+    requests.push(...createTextBoxRequests(slideId, elementId, elem, themeColors));
+  });
+
+  // Apply element changes
+  if (requests.length > 0) {
+    await slidesApi.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests },
+    });
+  }
+
+  // Update speaker notes if provided
+  if (slideDef.notes) {
+    // Re-fetch to get notes page object ID
+    const updated = await slidesApi.presentations.get({ presentationId });
+    const updatedSlide = updated.data.slides![targetIndex];
+    const notesId =
+      updatedSlide.slideProperties?.notesPage?.notesProperties
+        ?.speakerNotesObjectId;
+
+    if (notesId) {
+      await slidesApi.presentations.batchUpdate({
+        presentationId,
+        requestBody: {
+          requests: [
+            { deleteText: { objectId: notesId, textRange: { type: "ALL" } } },
+            {
+              insertText: {
+                objectId: notesId,
+                text: slideDef.notes,
+                insertionIndex: 0,
+              },
+            },
+          ],
+        },
+      });
+    }
   }
 
   return {
