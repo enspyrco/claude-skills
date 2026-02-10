@@ -794,9 +794,33 @@ describe("update-slide mode", () => {
   it("should clear and replace speaker notes", async () => {
     const { get, batchUpdate } = getMocks();
 
+    const slideWithNotes = {
+      objectId: "target_slide",
+      pageElements: [],
+      slideProperties: {
+        notesPage: {
+          notesProperties: {
+            speakerNotesObjectId: "notes_target_slide",
+          },
+          pageElements: [
+            {
+              objectId: "notes_target_slide",
+              shape: {
+                text: {
+                  textElements: [
+                    { textRun: { content: "Old speaker notes" } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+
     get.mockResolvedValueOnce({
       data: {
-        slides: [makeSlide("target_slide")],
+        slides: [slideWithNotes],
       },
     });
 

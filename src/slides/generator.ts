@@ -244,25 +244,36 @@ async function updateSlideContent(
       targetSlide.slideProperties?.notesPage?.notesProperties
         ?.speakerNotesObjectId;
     if (notesId) {
+      // Check if notes have existing text before trying to delete
+      const notesPage = targetSlide.slideProperties?.notesPage;
+      const notesElement = notesPage?.pageElements?.find(
+        (el) => el.objectId === notesId
+      );
+      const hasExistingText =
+        notesElement?.shape?.text?.textElements?.some(
+          (te) => te.textRun?.content && te.textRun.content.trim().length > 0
+        ) ?? false;
+
+      const requests: slides_v1.Schema$Request[] = [];
+      if (hasExistingText) {
+        requests.push({
+          deleteText: {
+            objectId: notesId,
+            textRange: { type: "ALL" },
+          },
+        });
+      }
+      requests.push({
+        insertText: {
+          objectId: notesId,
+          text: slideDef.notes,
+          insertionIndex: 0,
+        },
+      });
+
       await slidesApi.presentations.batchUpdate({
         presentationId,
-        requestBody: {
-          requests: [
-            {
-              deleteText: {
-                objectId: notesId,
-                textRange: { type: "ALL" },
-              },
-            },
-            {
-              insertText: {
-                objectId: notesId,
-                text: slideDef.notes,
-                insertionIndex: 0,
-              },
-            },
-          ],
-        },
+        requestBody: { requests },
       });
     }
   }
