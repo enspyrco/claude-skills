@@ -20,9 +20,19 @@ function pt(points: number): number {
 const MATRIX_CHARS =
   "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
 const MATRIX_GREEN: RgbColor = { red: 0, green: 0.8, blue: 0.2 };
+const FLASH_GREEN: RgbColor = { red: 0.3, green: 1.0, blue: 0.3 };
 const PRESERVE_CHARS = new Set([
   ".", ",", "!", "?", ":", ";", "-", "'", '"', "(", ")", "[", "]",
 ]);
+const RAIN_START_OFFSETS = [50, 100, 75]; // staggered heights per column (cycles)
+const RAIN_Y_STEP = 25;            // points each rain column drops per frame
+const RAIN_TAIL_FRAMES = 5;        // frames for text to settle after last deposit
+const RAIN_FADE_STEPS = [3, 5, 4]; // rain drop fade-OUT steps per column (cycles)
+const RAIN_FADE_IN_STEPS = [1, 3, 2]; // rain drop fade-IN steps per column (cycles)
+const TEXT_FADE_STEPS = [4, 7, 5];  // text char fade-in steps: black→green per column
+const RAIN_DROP_SIZE = 30;         // rain drop text box dimensions (points)
+const CHAR_WIDTH_RATIO = 0.48;     // approximate char width / fontSize for Arial
+const TEXT_BOX_PADDING_X = 7.2;    // text box internal left margin (~0.1in)
 
 export function garbleText(text: string): string {
   return text
@@ -35,26 +45,19 @@ export function garbleText(text: string): string {
 }
 
 export function buildMatrixFrame(
-  words: string[],
-  revealedCount: number
+  text: string,
+  revealedChars: number
 ): { text: string; revealedEndIndex: number } {
-  const revealed = words.slice(0, revealedCount);
-  const remaining = words.slice(revealedCount);
+  const clamped = Math.min(revealedChars, text.length);
+  const revealed = text.slice(0, clamped);
+  const remaining = text.slice(clamped);
 
   if (remaining.length === 0) {
-    const text = revealed.join(" ");
-    return { text, revealedEndIndex: text.length };
+    return { text: revealed, revealedEndIndex: revealed.length };
   }
 
-  const garbledPart = remaining.map((w) => garbleText(w)).join(" ");
-
-  if (revealed.length === 0) {
-    return { text: garbledPart, revealedEndIndex: 0 };
-  }
-
-  const revealedPart = revealed.join(" ");
-  const text = revealedPart + " " + garbledPart;
-  return { text, revealedEndIndex: revealedPart.length + 1 };
+  const garbled = garbleText(remaining);
+  return { text: revealed + garbled, revealedEndIndex: clamped };
 }
 
 /**
@@ -264,29 +267,97 @@ async function updateSlideContent(
   // Add new elements, tracking any that need matrix animation
   const animatedElements: Array<{
     elementId: string;
+    rainDropIds: string[];
+    rainCharIndices: number[];
     originalText: string;
     finalColor: RgbColor;
     fontSize: number;
     bold: boolean;
+    elemX: number;
+    elemY: number;
   }> = [];
 
   slideDef.elements.forEach((elem, elemIndex) => {
     const elementId = `${slideObjectId}_elem_${elemIndex}`;
     if (elem.animate === "matrix") {
       const finalColor = resolveColor(elem.color, themeColors);
+      // One rain drop per non-space character position
+      const rainCharIndices: number[] = [];
+      for (let i = 0; i < elem.text.length; i++) {
+        if (elem.text[i] !== " ") rainCharIndices.push(i);
+      }
+      const rainDropIds = rainCharIndices.map(
+        (_, i) => `${elementId}_rain_${i}`
+      );
       animatedElements.push({
         elementId,
+        rainDropIds,
+        rainCharIndices,
         originalText: elem.text,
         finalColor,
         fontSize: elem.size,
         bold: elem.bold || false,
+        elemX: elem.x,
+        elemY: elem.y,
       });
+      // Main text starts blank — rain drops are the only visual until they deposit
+      const blankText = elem.text
+        .split("")
+        .map(ch => ch === " " ? ch : " ")
+        .join("");
       requests.push(
         ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors, {
-          text: garbleText(elem.text),
+          text: blankText,
           color: MATRIX_GREEN,
         })
       );
+      // Create rain drops above the animated element (one per non-space character)
+      const charWidth = elem.size * CHAR_WIDTH_RATIO;
+      for (let i = 0; i < rainCharIndices.length; i++) {
+        const charIndex = rainCharIndices[i];
+        const dropX = elem.x + TEXT_BOX_PADDING_X + charIndex * charWidth;
+        const dropY = elem.y - RAIN_START_OFFSETS[i % RAIN_START_OFFSETS.length];
+        requests.push(
+          {
+            createShape: {
+              objectId: rainDropIds[i],
+              shapeType: "TEXT_BOX",
+              elementProperties: {
+                pageObjectId: slideObjectId,
+                size: {
+                  width: { magnitude: pt(RAIN_DROP_SIZE), unit: "EMU" },
+                  height: { magnitude: pt(RAIN_DROP_SIZE), unit: "EMU" },
+                },
+                transform: {
+                  scaleX: 1,
+                  scaleY: 1,
+                  translateX: pt(dropX),
+                  translateY: pt(dropY),
+                  unit: "EMU",
+                },
+              },
+            },
+          },
+          {
+            insertText: {
+              objectId: rainDropIds[i],
+              text: garbleText("X"),
+            },
+          },
+          {
+            updateTextStyle: {
+              objectId: rainDropIds[i],
+              style: {
+                fontFamily: "Arial",
+                fontSize: { magnitude: elem.size, unit: "PT" },
+                foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0, blue: 0 } } },
+                bold: true,
+              },
+              fields: "fontFamily,fontSize,foregroundColor,bold",
+            },
+          }
+        );
+      }
     } else {
       requests.push(
         ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors)
@@ -310,10 +381,14 @@ async function updateSlideContent(
       slidesApi,
       presentationId,
       anim.elementId,
+      anim.rainDropIds,
+      anim.rainCharIndices,
       anim.originalText,
       anim.finalColor,
       anim.fontSize,
-      anim.bold
+      anim.bold,
+      anim.elemX,
+      anim.elemY
     );
   }
 
@@ -367,18 +442,52 @@ async function animateMatrixReveal(
   slidesApi: slides_v1.Slides,
   presentationId: string,
   elementId: string,
+  rainDropIds: string[],
+  rainCharIndices: number[],
   originalText: string,
   finalColor: RgbColor,
   fontSize: number,
-  bold: boolean
+  bold: boolean,
+  elemX: number,
+  elemY: number
 ): Promise<void> {
-  const words = originalText.split(" ");
+  const baseStyle = {
+    fontFamily: "Arial",
+    fontSize: { magnitude: fontSize, unit: "PT" } as const,
+    bold,
+  };
 
-  for (let i = 1; i <= words.length; i++) {
-    const frame = buildMatrixFrame(words, i);
+  const charWidth = fontSize * CHAR_WIDTH_RATIO;
+
+  // Each column gets a staggered start offset (cycles through the array)
+  const startOffsets = rainDropIds.map(
+    (_, i) => RAIN_START_OFFSETS[i % RAIN_START_OFFSETS.length]
+  );
+  const maxStartOffset = Math.max(...startOffsets, RAIN_START_OFFSETS[0]);
+  const lastDepositFrame = maxStartOffset / RAIN_Y_STEP - 1;
+  const totalFrames = lastDepositFrame + 1 + RAIN_TAIL_FRAMES + 1;
+
+  // Reverse map: char index → rain drop index (for per-char fade timing)
+  const charToRainIndex = new Map<number, number>();
+  for (let i = 0; i < rainCharIndices.length; i++) {
+    charToRainIndex.set(rainCharIndices[i], i);
+  }
+
+  for (let frame = 0; frame < totalFrames; frame++) {
     const requests: slides_v1.Schema$Request[] = [];
+    const isFinalFrame = frame === totalFrames - 1;
 
-    // Delete all existing text in the element
+    // Determine which characters are deposited on this frame
+    const depositedIndices = new Set<number>();
+    for (let i = 0; i < rainDropIds.length; i++) {
+      const offset = startOffsets[i];
+      const charIdx = rainCharIndices[i];
+      if ((frame + 1) * RAIN_Y_STEP >= offset) {
+        depositedIndices.add(charIdx);
+      }
+    }
+
+    // === Update main line text ===
     requests.push({
       deleteText: {
         objectId: elementId,
@@ -386,54 +495,167 @@ async function animateMatrixReveal(
       },
     });
 
-    // Insert the frame text
-    requests.push({
-      insertText: {
-        objectId: elementId,
-        text: frame.text,
-      },
-    });
-
-    // Style the revealed portion with the final color
-    if (frame.revealedEndIndex > 0) {
+    if (depositedIndices.size > 0) {
+      // Build text: deposited chars show original, rest are blank
+      const frameText = originalText
+        .split("")
+        .map((ch, i) => {
+          if (ch === " ") return ch;
+          if (depositedIndices.has(i)) return ch;
+          return " ";
+        })
+        .join("");
+      requests.push({
+        insertText: {
+          objectId: elementId,
+          text: frameText,
+        },
+      });
+      // Base style: black (invisible baseline)
       requests.push({
         updateTextStyle: {
           objectId: elementId,
           style: {
-            fontFamily: "Arial",
-            fontSize: { magnitude: fontSize, unit: "PT" },
-            foregroundColor: { opaqueColor: { rgbColor: finalColor } },
-            bold,
+            ...baseStyle,
+            foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0, blue: 0 } } },
           },
           textRange: {
             type: "FIXED_RANGE",
             startIndex: 0,
-            endIndex: frame.revealedEndIndex,
+            endIndex: originalText.length,
           },
           fields: "fontFamily,fontSize,foregroundColor,bold",
         },
       });
+      // Per-character fade: black → FLASH_GREEN (stays green, no white transition)
+      for (const charIdx of depositedIndices) {
+        const rainIdx = charToRainIndex.get(charIdx)!;
+        const offset = startOffsets[rainIdx];
+        const depositFrame = Math.ceil(offset / RAIN_Y_STEP) - 1;
+        const framesSinceDeposit = frame - depositFrame;
+        const textFadeTotal = TEXT_FADE_STEPS[rainIdx % TEXT_FADE_STEPS.length];
+        const fadeProgress = Math.min(framesSinceDeposit / textFadeTotal, 1.0);
+        const color = {
+          red: FLASH_GREEN.red * fadeProgress,
+          green: FLASH_GREEN.green * fadeProgress,
+          blue: FLASH_GREEN.blue * fadeProgress,
+        };
+        requests.push({
+          updateTextStyle: {
+            objectId: elementId,
+            style: {
+              ...baseStyle,
+              foregroundColor: { opaqueColor: { rgbColor: color } },
+            },
+            textRange: {
+              type: "FIXED_RANGE",
+              startIndex: charIdx,
+              endIndex: charIdx + 1,
+            },
+            fields: "fontFamily,fontSize,foregroundColor,bold",
+          },
+        });
+      }
+    } else {
+      // No deposits yet — blank text (rain drops are the only visual)
+      const blankText = originalText
+        .split("")
+        .map(ch => ch === " " ? ch : " ")
+        .join("");
+      requests.push(
+        {
+          insertText: {
+            objectId: elementId,
+            text: blankText,
+          },
+        },
+        {
+          updateTextStyle: {
+            objectId: elementId,
+            style: {
+              ...baseStyle,
+              foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0, blue: 0 } } },
+            },
+            textRange: {
+              type: "FIXED_RANGE",
+              startIndex: 0,
+              endIndex: originalText.length,
+            },
+            fields: "fontFamily,fontSize,foregroundColor,bold",
+          },
+        }
+      );
     }
 
-    // Style the garbled portion with Matrix green (only if words remain)
-    if (i < words.length) {
-      requests.push({
-        updateTextStyle: {
-          objectId: elementId,
-          style: {
-            fontFamily: "Arial",
-            fontSize: { magnitude: fontSize, unit: "PT" },
-            foregroundColor: { opaqueColor: { rgbColor: MATRIX_GREEN } },
-            bold,
+    // === Update rain drops ===
+    if (isFinalFrame) {
+      // Cleanup: delete all rain drops
+      for (const id of rainDropIds) {
+        requests.push({ deleteObject: { objectId: id } });
+      }
+    } else {
+      // Move each rain drop; fade in before deposit, fade out after
+      for (let i = 0; i < rainDropIds.length; i++) {
+        const charIndex = rainCharIndices[i];
+        const dropX = elemX + TEXT_BOX_PADDING_X + charIndex * charWidth;
+        const offset = startOffsets[i];
+        const rainY = elemY - offset + (frame + 1) * RAIN_Y_STEP;
+        const hasDeposited = (frame + 1) * RAIN_Y_STEP >= offset;
+        let dropColor: RgbColor;
+        if (!hasDeposited) {
+          // Fading in: black → FLASH_GREEN at different rates
+          const fadeInSteps = RAIN_FADE_IN_STEPS[i % RAIN_FADE_IN_STEPS.length];
+          const fadeInProgress = Math.min((frame + 1) / fadeInSteps, 1.0);
+          dropColor = {
+            red: FLASH_GREEN.red * fadeInProgress,
+            green: FLASH_GREEN.green * fadeInProgress,
+            blue: FLASH_GREEN.blue * fadeInProgress,
+          };
+        } else {
+          const depositFrame = Math.ceil(offset / RAIN_Y_STEP) - 1;
+          const framesSinceDeposit = frame - depositFrame;
+          if (framesSinceDeposit === 0) {
+            dropColor = FLASH_GREEN;
+          } else {
+            const fadeSteps = RAIN_FADE_STEPS[i % RAIN_FADE_STEPS.length];
+            const fadeProgress = Math.min(framesSinceDeposit / fadeSteps, 1.0);
+            dropColor = {
+              red: MATRIX_GREEN.red * (1 - fadeProgress),
+              green: MATRIX_GREEN.green * (1 - fadeProgress),
+              blue: MATRIX_GREEN.blue * (1 - fadeProgress),
+            };
+          }
+        }
+        requests.push(
+          { deleteText: { objectId: rainDropIds[i], textRange: { type: "ALL" } } },
+          { insertText: { objectId: rainDropIds[i], text: garbleText("X") } },
+          {
+            updateTextStyle: {
+              objectId: rainDropIds[i],
+              style: {
+                fontFamily: "Arial",
+                fontSize: { magnitude: fontSize, unit: "PT" },
+                foregroundColor: { opaqueColor: { rgbColor: dropColor } },
+                bold: true,
+              },
+              fields: "fontFamily,fontSize,foregroundColor,bold",
+            },
           },
-          textRange: {
-            type: "FIXED_RANGE",
-            startIndex: frame.revealedEndIndex,
-            endIndex: frame.text.length,
-          },
-          fields: "fontFamily,fontSize,foregroundColor,bold",
-        },
-      });
+          {
+            updatePageElementTransform: {
+              objectId: rainDropIds[i],
+              applyMode: "ABSOLUTE",
+              transform: {
+                scaleX: 1,
+                scaleY: 1,
+                translateX: pt(dropX),
+                translateY: pt(rainY),
+                unit: "EMU",
+              },
+            },
+          }
+        );
+      }
     }
 
     // Each batchUpdate is a visible "frame" — API latency provides natural pacing

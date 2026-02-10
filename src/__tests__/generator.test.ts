@@ -1152,29 +1152,39 @@ describe("matrix animation", () => {
   });
 
   describe("buildMatrixFrame", () => {
-    it("should return all revealed text when revealedCount equals word count", () => {
-      const words = ["What", "is", "this"];
-      const frame = buildMatrixFrame(words, 3);
+    it("should return all revealed text when revealedChars covers full length", () => {
+      const text = "What is this";
+      const frame = buildMatrixFrame(text, 12);
 
       expect(frame.text).toBe("What is this");
       expect(frame.revealedEndIndex).toBe(12);
     });
 
     it("should return partially revealed text with garbled remainder", () => {
-      const words = ["Hello", "world"];
-      const frame = buildMatrixFrame(words, 1);
+      const text = "Hello world";
+      const frame = buildMatrixFrame(text, 5);
 
-      expect(frame.text.startsWith("Hello ")).toBe(true);
-      expect(frame.text.length).toBe("Hello world".length);
-      expect(frame.revealedEndIndex).toBe(6); // "Hello " = 6 chars
-      // The garbled portion should not equal the original word
-      const garbledPart = frame.text.slice(6);
-      expect(garbledPart).not.toBe("world");
+      expect(frame.text.startsWith("Hello")).toBe(true);
+      expect(frame.text.length).toBe(11);
+      expect(frame.revealedEndIndex).toBe(5);
+      // The garbled portion (after "Hello") should not equal the original
+      const garbledPart = frame.text.slice(5);
+      expect(garbledPart).not.toBe(" world");
+      // Space should still be preserved in garbled portion
+      expect(garbledPart[0]).toBe(" ");
+    });
+
+    it("should clamp revealedChars to text length", () => {
+      const text = "Hi";
+      const frame = buildMatrixFrame(text, 100);
+
+      expect(frame.text).toBe("Hi");
+      expect(frame.revealedEndIndex).toBe(2);
     });
   });
 
   describe("update-slide with animation", () => {
-    it("should use garbled text and green color for initial creation of animated elements", async () => {
+    it("should use blank text and green color for initial creation of animated elements", async () => {
       const { get, batchUpdate } = getMocks();
 
       get.mockResolvedValueOnce({
@@ -1211,7 +1221,7 @@ describe("matrix animation", () => {
         (r: Record<string, unknown>) => r.insertText
       )?.insertText as Record<string, unknown>;
 
-      // Text should be garbled (not equal to original)
+      // Text should be blank (spaces for un-deposited chars)
       expect(insertText.text).not.toBe("Hello world");
       expect((insertText.text as string).length).toBe("Hello world".length);
 
@@ -1225,7 +1235,7 @@ describe("matrix animation", () => {
       expect(opaqueColor.rgbColor).toEqual({ red: 0, green: 0.8, blue: 0.2 });
     });
 
-    it("should make N animation batchUpdate calls for N words", async () => {
+    it("should make animation batchUpdates based on max rain start offset", async () => {
       const { get, batchUpdate } = getMocks();
 
       get.mockResolvedValueOnce({
@@ -1234,6 +1244,8 @@ describe("matrix animation", () => {
         },
       });
 
+      // "Hello" = 5 drops, offsets cycle [50,100,75] → max=100
+      // lastDeposit=3, total=7 animation frames
       const config: SlideConfig = {
         title: "Q&A",
         presentationId: "pres-id",
@@ -1242,7 +1254,7 @@ describe("matrix animation", () => {
           {
             elements: [
               {
-                text: "one two three",
+                text: "Hello",
                 x: 0, y: 0, w: 100, h: 50,
                 size: 20,
                 color: { red: 1, green: 1, blue: 1 },
@@ -1255,11 +1267,78 @@ describe("matrix animation", () => {
 
       await generateSlidesFromConfig(mockAuth, config);
 
-      // 1 creation batch + 3 animation batches (one per word) = 4 total
-      expect(batchUpdate.mock.calls.length).toBe(4);
+      // 1 creation batch + 10 rain animation frames = 11 total
+      expect(batchUpdate.mock.calls.length).toBe(11);
     });
 
-    it("should have original text in final color on the last animation frame", async () => {
+    it("should stagger character deposits across multiple frames", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      // "ABCD" → 4 drops, offsets [50,100,75,50]
+      // Drop 0 (A): offset=50 deposits frame 1
+      // Drop 1 (B): offset=100 deposits frame 3
+      // Drop 2 (C): offset=75 deposits frame 2
+      // Drop 3 (D): offset=50 deposits frame 1
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "ABCD",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Frame 1 (call index 2): A and D deposit — start black (fade progress 0)
+      const frame1Reqs = batchUpdate.mock.calls[2][0]?.requestBody?.requests || [];
+      const frame1MainStyles = frame1Reqs.filter(
+        (r: Record<string, unknown>) =>
+          r.updateTextStyle &&
+          !((r.updateTextStyle as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      // Base black + A(black, just deposited) + D(black, just deposited) = 3 styles
+      expect(frame1MainStyles.length).toBe(3);
+
+      // Check that A (index 0) starts black on deposit frame
+      const fadeA = frame1MainStyles.find((r: Record<string, unknown>) => {
+        const range = (r.updateTextStyle as Record<string, unknown>).textRange as Record<string, unknown>;
+        return range.startIndex === 0 && range.endIndex === 1;
+      });
+      expect(fadeA).toBeDefined();
+      const styleA = (fadeA!.updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
+      const fgA = styleA.foregroundColor as Record<string, unknown>;
+      const opA = fgA.opaqueColor as Record<string, unknown>;
+      expect(opA.rgbColor).toEqual({ red: 0, green: 0, blue: 0 });
+
+      // Frame 3 (call index 4): B deposits (black), others fading in
+      const frame3Reqs = batchUpdate.mock.calls[4][0]?.requestBody?.requests || [];
+      const frame3MainStyles = frame3Reqs.filter(
+        (r: Record<string, unknown>) =>
+          r.updateTextStyle &&
+          !((r.updateTextStyle as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      // Base + A(fading) + B(black) + C(fading) + D(fading) = 5 styles
+      expect(frame3MainStyles.length).toBe(5);
+    });
+
+    it("should show original text fading toward final color on the last frame", async () => {
       const { get, batchUpdate } = getMocks();
 
       get.mockResolvedValueOnce({
@@ -1277,7 +1356,7 @@ describe("matrix animation", () => {
           {
             elements: [
               {
-                text: "Hello world",
+                text: "Hi!",
                 x: 0, y: 0, w: 100, h: 50,
                 size: 20,
                 color: finalColor,
@@ -1290,28 +1369,37 @@ describe("matrix animation", () => {
 
       await generateSlidesFromConfig(mockAuth, config);
 
-      // Last batchUpdate call = final animation frame
+      // Last batchUpdate call = final animation frame (per-char fade, not snap)
       const lastReqs = getLastRequests(batchUpdate);
       const insertText = lastReqs.find(
-        (r: Record<string, unknown>) => r.insertText
+        (r: Record<string, unknown>) =>
+          r.insertText &&
+          !((r.insertText as Record<string, unknown>).objectId as string).includes("_rain_")
       )?.insertText as Record<string, unknown>;
 
-      expect(insertText.text).toBe("Hello world");
+      expect(insertText.text).toBe("Hi!");
 
-      // Should style with final color, not green
-      const textStyle = lastReqs.find(
-        (r: Record<string, unknown>) => r.updateTextStyle
-      )?.updateTextStyle as Record<string, unknown>;
-      const style = textStyle.style as Record<string, unknown>;
-      const fgColor = style.foregroundColor as Record<string, unknown>;
-      const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
-      expect(opaqueColor.rgbColor).toEqual(finalColor);
-
-      // Final frame should only have one updateTextStyle (no garbled portion)
+      // Per-char styles: base black + 3 individual char fades = 4 styles
       const textStyles = lastReqs.filter(
-        (r: Record<string, unknown>) => r.updateTextStyle
+        (r: Record<string, unknown>) =>
+          r.updateTextStyle &&
+          !((r.updateTextStyle as Record<string, unknown>).objectId as string).includes("_rain_")
       );
-      expect(textStyles.length).toBe(1);
+      expect(textStyles.length).toBe(4);
+
+      // Each per-char style should have visible color (green > 0, faded in)
+      const perCharStyles = textStyles.filter((r: Record<string, unknown>) => {
+        const range = (r.updateTextStyle as Record<string, unknown>).textRange as Record<string, unknown>;
+        return range.type === "FIXED_RANGE" && (range.endIndex as number) - (range.startIndex as number) === 1;
+      });
+      expect(perCharStyles.length).toBe(3);
+      for (const pcs of perCharStyles) {
+        const style = (pcs.updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
+        const fgColor = style.foregroundColor as Record<string, unknown>;
+        const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+        const rgb = opaqueColor.rgbColor as Record<string, number>;
+        expect(rgb.green).toBeGreaterThan(0);
+      }
     });
 
     it("should not add extra batchUpdate calls for non-animated elements", async () => {
@@ -1348,7 +1436,7 @@ describe("matrix animation", () => {
       expect(batchUpdate.mock.calls.length).toBe(1);
     });
 
-    it("should handle single-word text (frame 1 is also the final frame)", async () => {
+    it("should have same frame count for single-char text", async () => {
       const { get, batchUpdate } = getMocks();
 
       get.mockResolvedValueOnce({
@@ -1366,7 +1454,7 @@ describe("matrix animation", () => {
           {
             elements: [
               {
-                text: "Hello",
+                text: "X",
                 x: 0, y: 0, w: 100, h: 50,
                 size: 20,
                 color: finalColor,
@@ -1379,26 +1467,356 @@ describe("matrix animation", () => {
 
       await generateSlidesFromConfig(mockAuth, config);
 
-      // 1 creation batch + 1 animation frame = 2 total
-      expect(batchUpdate.mock.calls.length).toBe(2);
+      // Single char: offset=50, lastDeposit=1, totalFrames=1+1+5+1=8
+      // 1 creation batch + 8 animation frames = 9 total
+      expect(batchUpdate.mock.calls.length).toBe(9);
 
-      // The single animation frame should have the original text and final color
+      // Final frame should have original text in final color
       const lastReqs = getLastRequests(batchUpdate);
       const insertText = lastReqs.find(
-        (r: Record<string, unknown>) => r.insertText
+        (r: Record<string, unknown>) =>
+          r.insertText &&
+          !((r.insertText as Record<string, unknown>).objectId as string).includes("_rain_")
       )?.insertText as Record<string, unknown>;
-      expect(insertText.text).toBe("Hello");
+      expect(insertText.text).toBe("X");
+    });
 
-      // Only one updateTextStyle (no garbled portion)
-      const textStyles = lastReqs.filter(
-        (r: Record<string, unknown>) => r.updateTextStyle
+    it("should create rain drops in the initial creation batch for non-space chars", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "Hello",
+                x: 50, y: 100, w: 200, h: 50,
+                size: 24,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      const creationReqs = batchUpdate.mock.calls[0][0]?.requestBody?.requests || [];
+
+      // "Hello" = 5 non-space chars → 5 rain drops
+      const rainCreates = creationReqs.filter(
+        (r: Record<string, unknown>) =>
+          r.createShape &&
+          ((r.createShape as Record<string, unknown>).objectId as string).includes("_rain_")
       );
-      expect(textStyles.length).toBe(1);
+      expect(rainCreates.length).toBe(5);
 
-      const style = (textStyles[0].updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
-      const fgColor = style.foregroundColor as Record<string, unknown>;
-      const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
-      expect(opaqueColor.rgbColor).toEqual(finalColor);
+      // Staggered Y: offsets cycle [50,100,75] → Y = 100 - offset
+      const expectedYs = [50, 0, 25, 50, 0]; // 100-50, 100-100, 100-75, 100-50, 100-100
+      for (let i = 0; i < rainCreates.length; i++) {
+        const cs = rainCreates[i].createShape as Record<string, unknown>;
+        const elemProps = cs.elementProperties as Record<string, unknown>;
+        const transform = elemProps.transform as Record<string, unknown>;
+        expect(transform.translateY).toBe(expectedYs[i] * 12700);
+      }
+
+      // First rain drop at X = pt(50 + 7.2) with TEXT_BOX_PADDING_X offset
+      const rd0 = (rainCreates[0].createShape as Record<string, unknown>);
+      const ep0 = rd0.elementProperties as Record<string, unknown>;
+      const t0 = ep0.transform as Record<string, unknown>;
+      expect(t0.translateX).toBe(57.2 * 12700);
+
+      // Rain drop insertTexts should have katakana characters
+      const rainInserts = creationReqs.filter(
+        (r: Record<string, unknown>) =>
+          r.insertText &&
+          ((r.insertText as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(rainInserts.length).toBe(5);
+      for (const ri of rainInserts) {
+        const text = (ri.insertText as Record<string, unknown>).text as string;
+        expect(text.length).toBe(1);
+        const code = text.charCodeAt(0);
+        expect(code).toBeGreaterThanOrEqual(0xff66);
+        expect(code).toBeLessThanOrEqual(0xff9d);
+      }
+
+      // All rain drops start black (they fade in during animation)
+      const rainStyles = creationReqs.filter(
+        (r: Record<string, unknown>) =>
+          r.updateTextStyle &&
+          ((r.updateTextStyle as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(rainStyles.length).toBe(5);
+      for (const rs of rainStyles) {
+        const style = (rs.updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
+        const fgColor = style.foregroundColor as Record<string, unknown>;
+        const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+        expect(opaqueColor.rgbColor).toEqual({ red: 0, green: 0, blue: 0 });
+      }
+    });
+
+    it("should move all rain drops simultaneously via updatePageElementTransform", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "ABC",
+                x: 10, y: 80, w: 200, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Frame 0 (call index 1): all 3 rain drops should move simultaneously
+      const frame0Reqs = batchUpdate.mock.calls[1][0]?.requestBody?.requests || [];
+      const transformReqs = frame0Reqs.filter(
+        (r: Record<string, unknown>) => r.updatePageElementTransform
+      );
+
+      // All 3 rain drops have transforms
+      expect(transformReqs.length).toBe(3);
+
+      // Staggered Y: rainY = elemY - offset + (frame+1)*25
+      // Frame 0: [80-50+25=55, 80-100+25=5, 80-75+25=30]
+      const expectedYs = [55, 5, 30];
+      for (let i = 0; i < transformReqs.length; i++) {
+        const t = transformReqs[i].updatePageElementTransform as Record<string, unknown>;
+        expect(t.applyMode).toBe("ABSOLUTE");
+        const transform = t.transform as Record<string, unknown>;
+        expect(transform.translateY).toBe(expectedYs[i] * 12700);
+      }
+
+      // X positions differ per character (with TEXT_BOX_PADDING_X = 7.2)
+      const charWidth = 20 * 0.48; // = 9.6
+      const padX = 7.2;
+      const xValues = transformReqs.map((tr: Record<string, unknown>) => {
+        const t = tr.updatePageElementTransform as Record<string, unknown>;
+        const transform = t.transform as Record<string, unknown>;
+        return transform.translateX;
+      });
+      expect(xValues[0]).toBe((10 + padX + 0 * charWidth) * 12700);
+      expect(xValues[1]).toBe((10 + padX + 1 * charWidth) * 12700);
+      expect(xValues[2]).toBe((10 + padX + 2 * charWidth) * 12700);
+    });
+
+    it("should show katakana in rain drops on pre-deposit frames", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "ABCD",
+                x: 0, y: 50, w: 200, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Frame 0 (call index 1): all 4 rain drops should have katakana text
+      const frame0Reqs = batchUpdate.mock.calls[1][0]?.requestBody?.requests || [];
+      const rainInserts = frame0Reqs.filter(
+        (r: Record<string, unknown>) =>
+          r.insertText &&
+          ((r.insertText as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(rainInserts.length).toBe(4);
+      for (const ri of rainInserts) {
+        const text = (ri.insertText as Record<string, unknown>).text as string;
+        expect(text.length).toBe(1);
+        const code = text.charCodeAt(0);
+        expect(code).toBeGreaterThanOrEqual(0xff66);
+        expect(code).toBeLessThanOrEqual(0xff9d);
+      }
+    });
+
+    it("should delete all rain drops on the final animation frame", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "AB",
+                x: 0, y: 50, w: 200, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // "AB" = 2 drops, offsets [50,100], max=100 → 10 anim frames, 11 total
+      expect(batchUpdate.mock.calls.length).toBe(11);
+
+      // Last frame should have deleteObject for all 2 rain drops
+      const lastReqs = getLastRequests(batchUpdate);
+      const deleteObjs = lastReqs.filter(
+        (r: Record<string, unknown>) =>
+          r.deleteObject &&
+          ((r.deleteObject as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(deleteObjs.length).toBe(2);
+    });
+
+    it("should not create rain drops for space characters", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "A B",
+                x: 0, y: 50, w: 200, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      const creationReqs = batchUpdate.mock.calls[0][0]?.requestBody?.requests || [];
+      // "A B" = 2 non-space chars → 2 rain drops (space skipped)
+      const rainCreates = creationReqs.filter(
+        (r: Record<string, unknown>) =>
+          r.createShape &&
+          ((r.createShape as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(rainCreates.length).toBe(2);
+    });
+
+    it("should fade rain drops at different rates after deposit", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "AB",
+                x: 0, y: 50, w: 200, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Frame 5 (call index 6): both drops deposited, fading at different rates
+      // Drop 0 (offset=50, fadeSteps=3): 4 frames since deposit → fully black
+      // Drop 1 (offset=100, fadeSteps=5): 2 frames since deposit → partially faded
+      const frame5Reqs = batchUpdate.mock.calls[6][0]?.requestBody?.requests || [];
+      const rainStyles = frame5Reqs.filter(
+        (r: Record<string, unknown>) =>
+          r.updateTextStyle &&
+          ((r.updateTextStyle as Record<string, unknown>).objectId as string).includes("_rain_")
+      );
+      expect(rainStyles.length).toBe(2);
+
+      // Extract green channel from each rain drop
+      const greens = rainStyles.map((rs: Record<string, unknown>) => {
+        const style = (rs.updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
+        const fgColor = style.foregroundColor as Record<string, unknown>;
+        const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+        const rgb = opaqueColor.rgbColor as Record<string, number>;
+        return rgb.green;
+      });
+
+      // Drop 0: fully faded to black
+      expect(greens[0]).toBe(0);
+
+      // Drop 1: partially faded (less than matrix green but not black)
+      expect(greens[1]).toBeGreaterThan(0);
+      expect(greens[1]).toBeLessThan(0.8);
+
+      // Different fade rates produce different values
+      expect(greens[0]).not.toBe(greens[1]);
     });
   });
 });
