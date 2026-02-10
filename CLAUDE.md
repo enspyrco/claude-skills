@@ -2,6 +2,10 @@
 
 Guidance for Claude Code when working on this repository.
 
+## Reminders
+
+- Check out issue #26 — multiplayer audience voting game for `/live-qa` (PWA + quiz show style). A fun feature idea worth exploring when the time is right.
+
 ## Project Overview
 
 This repo contains two main components:
