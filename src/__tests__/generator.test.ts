@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   generateSlidesFromConfig,
   generateSlides,
+  garbleText,
+  buildMatrixFrame,
 } from "../slides/generator.js";
 import { SlideConfig, ReviewData } from "../slides/types.js";
 import { google } from "googleapis";
@@ -1108,5 +1110,295 @@ describe("generateSlides (legacy)", () => {
 
     const result = await generateSlides(mockAuth, minimalData);
     expect(result.presentationId).toBe("legacy-pres-id");
+  });
+});
+
+describe("matrix animation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("garbleText", () => {
+    it("should preserve spaces and punctuation", () => {
+      const text = "Hello, world! How are you?";
+      const garbled = garbleText(text);
+
+      expect(garbled.length).toBe(text.length);
+      // Spaces preserved at same positions
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === " ") {
+          expect(garbled[i]).toBe(" ");
+        }
+      }
+      // Punctuation preserved
+      expect(garbled[5]).toBe(",");
+      expect(garbled[12]).toBe("!");
+      expect(garbled[25]).toBe("?");
+    });
+
+    it("should replace non-punctuation characters with katakana", () => {
+      const text = "ABC";
+      const garbled = garbleText(text);
+
+      expect(garbled).not.toBe(text);
+      expect(garbled.length).toBe(3);
+      // Each character should be a half-width katakana (U+FF66 to U+FF9D)
+      for (const ch of garbled) {
+        const code = ch.charCodeAt(0);
+        expect(code).toBeGreaterThanOrEqual(0xff66);
+        expect(code).toBeLessThanOrEqual(0xff9d);
+      }
+    });
+  });
+
+  describe("buildMatrixFrame", () => {
+    it("should return all revealed text when revealedCount equals word count", () => {
+      const words = ["What", "is", "this"];
+      const frame = buildMatrixFrame(words, 3);
+
+      expect(frame.text).toBe("What is this");
+      expect(frame.revealedEndIndex).toBe(12);
+    });
+
+    it("should return partially revealed text with garbled remainder", () => {
+      const words = ["Hello", "world"];
+      const frame = buildMatrixFrame(words, 1);
+
+      expect(frame.text.startsWith("Hello ")).toBe(true);
+      expect(frame.text.length).toBe("Hello world".length);
+      expect(frame.revealedEndIndex).toBe(6); // "Hello " = 6 chars
+      // The garbled portion should not equal the original word
+      const garbledPart = frame.text.slice(6);
+      expect(garbledPart).not.toBe("world");
+    });
+  });
+
+  describe("update-slide with animation", () => {
+    it("should use garbled text and green color for initial creation of animated elements", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "Hello world",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 24,
+                color: { red: 1, green: 1, blue: 1 },
+                bold: true,
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // First batchUpdate = creation batch with garbled text + green color
+      const creationReqs = batchUpdate.mock.calls[0][0]?.requestBody?.requests || [];
+      const insertText = creationReqs.find(
+        (r: Record<string, unknown>) => r.insertText
+      )?.insertText as Record<string, unknown>;
+
+      // Text should be garbled (not equal to original)
+      expect(insertText.text).not.toBe("Hello world");
+      expect((insertText.text as string).length).toBe("Hello world".length);
+
+      // Color should be Matrix green
+      const textStyle = creationReqs.find(
+        (r: Record<string, unknown>) => r.updateTextStyle
+      )?.updateTextStyle as Record<string, unknown>;
+      const style = textStyle.style as Record<string, unknown>;
+      const fgColor = style.foregroundColor as Record<string, unknown>;
+      const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+      expect(opaqueColor.rgbColor).toEqual({ red: 0, green: 0.8, blue: 0.2 });
+    });
+
+    it("should make N animation batchUpdate calls for N words", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "one two three",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // 1 creation batch + 3 animation batches (one per word) = 4 total
+      expect(batchUpdate.mock.calls.length).toBe(4);
+    });
+
+    it("should have original text in final color on the last animation frame", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const finalColor = { red: 1, green: 1, blue: 1 };
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "Hello world",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 20,
+                color: finalColor,
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Last batchUpdate call = final animation frame
+      const lastReqs = getLastRequests(batchUpdate);
+      const insertText = lastReqs.find(
+        (r: Record<string, unknown>) => r.insertText
+      )?.insertText as Record<string, unknown>;
+
+      expect(insertText.text).toBe("Hello world");
+
+      // Should style with final color, not green
+      const textStyle = lastReqs.find(
+        (r: Record<string, unknown>) => r.updateTextStyle
+      )?.updateTextStyle as Record<string, unknown>;
+      const style = textStyle.style as Record<string, unknown>;
+      const fgColor = style.foregroundColor as Record<string, unknown>;
+      const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+      expect(opaqueColor.rgbColor).toEqual(finalColor);
+
+      // Final frame should only have one updateTextStyle (no garbled portion)
+      const textStyles = lastReqs.filter(
+        (r: Record<string, unknown>) => r.updateTextStyle
+      );
+      expect(textStyles.length).toBe(1);
+    });
+
+    it("should not add extra batchUpdate calls for non-animated elements", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "Static text here",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 20,
+                color: { red: 1, green: 1, blue: 1 },
+                // no animate property
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // Only 1 creation batch, no animation batches
+      expect(batchUpdate.mock.calls.length).toBe(1);
+    });
+
+    it("should handle single-word text (frame 1 is also the final frame)", async () => {
+      const { get, batchUpdate } = getMocks();
+
+      get.mockResolvedValueOnce({
+        data: {
+          slides: [makeSlide("target_slide")],
+        },
+      });
+
+      const finalColor = { red: 1, green: 1, blue: 1 };
+      const config: SlideConfig = {
+        title: "Q&A",
+        presentationId: "pres-id",
+        updateSlide: 0,
+        slides: [
+          {
+            elements: [
+              {
+                text: "Hello",
+                x: 0, y: 0, w: 100, h: 50,
+                size: 20,
+                color: finalColor,
+                animate: "matrix",
+              },
+            ],
+          },
+        ],
+      };
+
+      await generateSlidesFromConfig(mockAuth, config);
+
+      // 1 creation batch + 1 animation frame = 2 total
+      expect(batchUpdate.mock.calls.length).toBe(2);
+
+      // The single animation frame should have the original text and final color
+      const lastReqs = getLastRequests(batchUpdate);
+      const insertText = lastReqs.find(
+        (r: Record<string, unknown>) => r.insertText
+      )?.insertText as Record<string, unknown>;
+      expect(insertText.text).toBe("Hello");
+
+      // Only one updateTextStyle (no garbled portion)
+      const textStyles = lastReqs.filter(
+        (r: Record<string, unknown>) => r.updateTextStyle
+      );
+      expect(textStyles.length).toBe(1);
+
+      const style = (textStyles[0].updateTextStyle as Record<string, unknown>).style as Record<string, unknown>;
+      const fgColor = style.foregroundColor as Record<string, unknown>;
+      const opaqueColor = fgColor.opaqueColor as Record<string, unknown>;
+      expect(opaqueColor.rgbColor).toEqual(finalColor);
+    });
   });
 });

@@ -43,7 +43,8 @@ The audience is waiting. Before doing any research, generate a unique temp path 
         {
           "text": "<THE QUESTION>",
           "x": 40, "y": 40, "w": 640, "h": 50,
-          "size": 24, "color": { "red": 1, "green": 1, "blue": 1 }, "bold": true
+          "size": 24, "color": { "red": 1, "green": 1, "blue": 1 }, "bold": true,
+          "animate": "matrix"
         },
         {
           "text": "Researching...",
