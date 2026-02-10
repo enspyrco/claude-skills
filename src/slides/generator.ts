@@ -403,7 +403,7 @@ async function animateMatrixReveal(
             fontFamily: "Arial",
             fontSize: { magnitude: fontSize, unit: "PT" },
             foregroundColor: { opaqueColor: { rgbColor: finalColor } },
-            bold: bold || false,
+            bold,
           },
           textRange: {
             type: "FIXED_RANGE",
@@ -424,7 +424,7 @@ async function animateMatrixReveal(
             fontFamily: "Arial",
             fontSize: { magnitude: fontSize, unit: "PT" },
             foregroundColor: { opaqueColor: { rgbColor: MATRIX_GREEN } },
-            bold: bold || false,
+            bold,
           },
           textRange: {
             type: "FIXED_RANGE",
