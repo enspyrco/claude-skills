@@ -44,22 +44,6 @@ export function garbleText(text: string): string {
     .join("");
 }
 
-export function buildMatrixFrame(
-  text: string,
-  revealedChars: number
-): { text: string; revealedEndIndex: number } {
-  const clamped = Math.min(revealedChars, text.length);
-  const revealed = text.slice(0, clamped);
-  const remaining = text.slice(clamped);
-
-  if (remaining.length === 0) {
-    return { text: revealed, revealedEndIndex: revealed.length };
-  }
-
-  const garbled = garbleText(remaining);
-  return { text: revealed + garbled, revealedEndIndex: clamped };
-}
-
 /**
  * Generate slides from a SlideConfig
  */
@@ -270,7 +254,6 @@ async function updateSlideContent(
     rainDropIds: string[];
     rainCharIndices: number[];
     originalText: string;
-    finalColor: RgbColor;
     fontSize: number;
     bold: boolean;
     elemX: number;
@@ -280,7 +263,6 @@ async function updateSlideContent(
   slideDef.elements.forEach((elem, elemIndex) => {
     const elementId = `${slideObjectId}_elem_${elemIndex}`;
     if (elem.animate === "matrix") {
-      const finalColor = resolveColor(elem.color, themeColors);
       // One rain drop per non-space character position
       const rainCharIndices: number[] = [];
       for (let i = 0; i < elem.text.length; i++) {
@@ -294,7 +276,6 @@ async function updateSlideContent(
         rainDropIds,
         rainCharIndices,
         originalText: elem.text,
-        finalColor,
         fontSize: elem.size,
         bold: elem.bold || false,
         elemX: elem.x,
@@ -384,7 +365,6 @@ async function updateSlideContent(
       anim.rainDropIds,
       anim.rainCharIndices,
       anim.originalText,
-      anim.finalColor,
       anim.fontSize,
       anim.bold,
       anim.elemX,
@@ -445,7 +425,6 @@ async function animateMatrixReveal(
   rainDropIds: string[],
   rainCharIndices: number[],
   originalText: string,
-  finalColor: RgbColor,
   fontSize: number,
   bold: boolean,
   elemX: number,
@@ -464,7 +443,7 @@ async function animateMatrixReveal(
     (_, i) => RAIN_START_OFFSETS[i % RAIN_START_OFFSETS.length]
   );
   const maxStartOffset = Math.max(...startOffsets, RAIN_START_OFFSETS[0]);
-  const lastDepositFrame = maxStartOffset / RAIN_Y_STEP - 1;
+  const lastDepositFrame = Math.ceil(maxStartOffset / RAIN_Y_STEP) - 1;
   const totalFrames = lastDepositFrame + 1 + RAIN_TAIL_FRAMES + 1;
 
   // Reverse map: char index → rain drop index (for per-char fade timing)

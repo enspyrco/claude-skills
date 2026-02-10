@@ -3,7 +3,6 @@ import {
   generateSlidesFromConfig,
   generateSlides,
   garbleText,
-  buildMatrixFrame,
 } from "../slides/generator.js";
 import { SlideConfig, ReviewData } from "../slides/types.js";
 import { google } from "googleapis";
@@ -1148,38 +1147,6 @@ describe("matrix animation", () => {
         expect(code).toBeGreaterThanOrEqual(0xff66);
         expect(code).toBeLessThanOrEqual(0xff9d);
       }
-    });
-  });
-
-  describe("buildMatrixFrame", () => {
-    it("should return all revealed text when revealedChars covers full length", () => {
-      const text = "What is this";
-      const frame = buildMatrixFrame(text, 12);
-
-      expect(frame.text).toBe("What is this");
-      expect(frame.revealedEndIndex).toBe(12);
-    });
-
-    it("should return partially revealed text with garbled remainder", () => {
-      const text = "Hello world";
-      const frame = buildMatrixFrame(text, 5);
-
-      expect(frame.text.startsWith("Hello")).toBe(true);
-      expect(frame.text.length).toBe(11);
-      expect(frame.revealedEndIndex).toBe(5);
-      // The garbled portion (after "Hello") should not equal the original
-      const garbledPart = frame.text.slice(5);
-      expect(garbledPart).not.toBe(" world");
-      // Space should still be preserved in garbled portion
-      expect(garbledPart[0]).toBe(" ");
-    });
-
-    it("should clamp revealedChars to text length", () => {
-      const text = "Hi";
-      const frame = buildMatrixFrame(text, 100);
-
-      expect(frame.text).toBe("Hi");
-      expect(frame.revealedEndIndex).toBe(2);
     });
   });
 
