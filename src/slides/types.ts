@@ -48,6 +48,7 @@ export interface SlideElement {
   size: number;
   color: string | RgbColor;
   bold?: boolean;
+  animate?: "matrix";
 }
 
 export interface SlideDefinition {

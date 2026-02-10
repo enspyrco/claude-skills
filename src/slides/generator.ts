@@ -16,6 +16,47 @@ function pt(points: number): number {
   return points * PT_TO_EMU;
 }
 
+// Matrix animation constants
+const MATRIX_CHARS =
+  "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
+const MATRIX_GREEN: RgbColor = { red: 0, green: 0.8, blue: 0.2 };
+const PRESERVE_CHARS = new Set([
+  ".", ",", "!", "?", ":", ";", "-", "'", '"', "(", ")", "[", "]",
+]);
+
+export function garbleText(text: string): string {
+  return text
+    .split("")
+    .map((ch) => {
+      if (ch === " " || PRESERVE_CHARS.has(ch)) return ch;
+      return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+    })
+    .join("");
+}
+
+export function buildMatrixFrame(
+  words: string[],
+  revealedCount: number
+): { text: string; revealedEndIndex: number } {
+  const revealed = words.slice(0, revealedCount);
+  const remaining = words.slice(revealedCount);
+
+  if (remaining.length === 0) {
+    const text = revealed.join(" ");
+    return { text, revealedEndIndex: text.length };
+  }
+
+  const garbledPart = remaining.map((w) => garbleText(w)).join(" ");
+
+  if (revealed.length === 0) {
+    return { text: garbledPart, revealedEndIndex: 0 };
+  }
+
+  const revealedPart = revealed.join(" ");
+  const text = revealedPart + " " + garbledPart;
+  return { text, revealedEndIndex: revealedPart.length + 1 };
+}
+
 /**
  * Generate slides from a SlideConfig
  */
@@ -220,12 +261,37 @@ async function updateSlideContent(
     });
   }
 
-  // Add new elements
+  // Add new elements, tracking any that need matrix animation
+  const animatedElements: Array<{
+    elementId: string;
+    originalText: string;
+    finalColor: RgbColor;
+    fontSize: number;
+    bold: boolean;
+  }> = [];
+
   slideDef.elements.forEach((elem, elemIndex) => {
     const elementId = `${slideObjectId}_elem_${elemIndex}`;
-    requests.push(
-      ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors)
-    );
+    if (elem.animate === "matrix") {
+      const finalColor = resolveColor(elem.color, themeColors);
+      animatedElements.push({
+        elementId,
+        originalText: elem.text,
+        finalColor,
+        fontSize: elem.size,
+        bold: elem.bold || false,
+      });
+      requests.push(
+        ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors, {
+          text: garbleText(elem.text),
+          color: MATRIX_GREEN,
+        })
+      );
+    } else {
+      requests.push(
+        ...createTextBoxRequests(slideObjectId, elementId, elem, themeColors)
+      );
+    }
   });
 
   // Apply element requests in batches
@@ -236,6 +302,19 @@ async function updateSlideContent(
       presentationId,
       requestBody: { requests: batch },
     });
+  }
+
+  // Run matrix reveal animation for animated elements
+  for (const anim of animatedElements) {
+    await animateMatrixReveal(
+      slidesApi,
+      presentationId,
+      anim.elementId,
+      anim.originalText,
+      anim.finalColor,
+      anim.fontSize,
+      anim.bold
+    );
   }
 
   // Update speaker notes (clear existing, then insert new)
@@ -284,13 +363,96 @@ async function updateSlideContent(
   };
 }
 
+async function animateMatrixReveal(
+  slidesApi: slides_v1.Slides,
+  presentationId: string,
+  elementId: string,
+  originalText: string,
+  finalColor: RgbColor,
+  fontSize: number,
+  bold: boolean
+): Promise<void> {
+  const words = originalText.split(" ");
+
+  for (let i = 1; i <= words.length; i++) {
+    const frame = buildMatrixFrame(words, i);
+    const requests: slides_v1.Schema$Request[] = [];
+
+    // Delete all existing text in the element
+    requests.push({
+      deleteText: {
+        objectId: elementId,
+        textRange: { type: "ALL" },
+      },
+    });
+
+    // Insert the frame text
+    requests.push({
+      insertText: {
+        objectId: elementId,
+        text: frame.text,
+      },
+    });
+
+    // Style the revealed portion with the final color
+    if (frame.revealedEndIndex > 0) {
+      requests.push({
+        updateTextStyle: {
+          objectId: elementId,
+          style: {
+            fontFamily: "Arial",
+            fontSize: { magnitude: fontSize, unit: "PT" },
+            foregroundColor: { opaqueColor: { rgbColor: finalColor } },
+            bold: bold || false,
+          },
+          textRange: {
+            type: "FIXED_RANGE",
+            startIndex: 0,
+            endIndex: frame.revealedEndIndex,
+          },
+          fields: "fontFamily,fontSize,foregroundColor,bold",
+        },
+      });
+    }
+
+    // Style the garbled portion with Matrix green (only if words remain)
+    if (i < words.length) {
+      requests.push({
+        updateTextStyle: {
+          objectId: elementId,
+          style: {
+            fontFamily: "Arial",
+            fontSize: { magnitude: fontSize, unit: "PT" },
+            foregroundColor: { opaqueColor: { rgbColor: MATRIX_GREEN } },
+            bold: bold || false,
+          },
+          textRange: {
+            type: "FIXED_RANGE",
+            startIndex: frame.revealedEndIndex,
+            endIndex: frame.text.length,
+          },
+          fields: "fontFamily,fontSize,foregroundColor,bold",
+        },
+      });
+    }
+
+    // Each batchUpdate is a visible "frame" — API latency provides natural pacing
+    await slidesApi.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests },
+    });
+  }
+}
+
 function createTextBoxRequests(
   slideId: string,
   elementId: string,
   elem: SlideElement,
-  themeColors?: Record<string, RgbColor>
+  themeColors?: Record<string, RgbColor>,
+  overrides?: { text?: string; color?: RgbColor }
 ): slides_v1.Schema$Request[] {
-  const color = resolveColor(elem.color, themeColors);
+  const color = overrides?.color || resolveColor(elem.color, themeColors);
+  const text = overrides?.text ?? elem.text;
 
   return [
     {
@@ -316,7 +478,7 @@ function createTextBoxRequests(
     {
       insertText: {
         objectId: elementId,
-        text: elem.text,
+        text: text,
       },
     },
     {
