@@ -24,43 +24,21 @@ KELVIN_IS_COLLAB=$(gh api repos/$REPO/collaborators/KelvinBitBrawler 2>/dev/null
 
 If either is missing and `ENSPYR_ADMIN_PAT` is available, invite and accept (same as ship.md Step 0). If no admin PAT, warn the user.
 
-2. **Check branch protection requires 2 reviews:**
+2. **Bump required reviews to 2 for the cage match:**
 
 ```bash
 PR_REVIEW_CONFIG=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null)
 CURRENT_REVIEW_COUNT=$(echo "$PR_REVIEW_CONFIG" | jq '.required_approving_review_count')
-DISMISS_STALE=$(echo "$PR_REVIEW_CONFIG" | jq '.dismiss_stale_reviews')
 ```
 
-If `CURRENT_REVIEW_COUNT` is not `2` or `DISMISS_STALE` is not `true`, fetch existing protection and update while preserving status checks:
+If `CURRENT_REVIEW_COUNT` is not `2`, use the targeted PATCH endpoint (not the full PUT, which can fail on scoped tokens and risks clobbering other protection settings):
 
 ```bash
-# Fetch existing status checks config (if any)
-EXISTING_CHECKS=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_status_checks 2>/dev/null)
-STRICT=$(echo "$EXISTING_CHECKS" | jq -r '.strict // false')
-CONTEXTS=$(echo "$EXISTING_CHECKS" | jq -r '.contexts[]' 2>/dev/null)
-
-# Build the protection update
-PROTECTION_ARGS=(
-  -X PUT
-  -H "Accept: application/vnd.github+json"
-  -f "required_pull_request_reviews[required_approving_review_count]=2"
-  -f "required_pull_request_reviews[dismiss_stale_reviews]=true"
-  -f "enforce_admins=false"
-  -f "restrictions=null"
-)
-
-# Re-include existing status checks if they exist
-if [ -n "$CONTEXTS" ]; then
-  PROTECTION_ARGS+=(-f "required_status_checks[strict]=$STRICT")
-  for ctx in $CONTEXTS; do
-    PROTECTION_ARGS+=(-f "required_status_checks[contexts][]=$ctx")
-  done
-else
-  PROTECTION_ARGS+=(-f "required_status_checks=null")
-fi
-
-gh api "repos/$REPO/branches/$BASE_BRANCH/protection" "${PROTECTION_ARGS[@]}"
+curl -s -X PATCH \
+  -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
+  -d '{"required_approving_review_count":2,"dismiss_stale_reviews":true}'
 ```
 
 3. **Update initialization marker:**
@@ -85,3 +63,17 @@ This sends the PR through both Maxwell (Claude) and Kelvin (Gemini) for independ
 ## Override: Merge Requirement (Step 7)
 
 **Both reviewers must APPROVE** before merging. If either reviewer returns REQUEST_CHANGES, follow the Step 6 feedback handling flow and then re-run `/cage-match` (not just `/pr-review`).
+
+## Post-Merge: Restore Branch Protection
+
+After merging, restore required reviews back to 1 so normal `/ship` PRs aren't blocked:
+
+```bash
+curl -s -X PATCH \
+  -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
+  -d '{"required_approving_review_count":1,"dismiss_stale_reviews":true}'
+```
+
+**Important:** Always use the targeted `PATCH .../required_pull_request_reviews` endpoint, not the full `PUT .../protection`. The full PUT requires broader token scopes and risks clobbering other protection settings (status checks, restrictions, etc.).
