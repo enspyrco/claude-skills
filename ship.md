@@ -368,7 +368,7 @@ CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
 CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.additions + .deletions')
 ```
 
-**If large change (10+ files or 500+ lines changed):** before reviewing, run the "Pre-Step: Ensure Dual Review Setup" from `ship-major-feature.md` to verify branch protection requires 2 reviews and both reviewer bots are collaborators. Then run `/cage-match $PR_NUMBER`
+**If large change (10+ files or 500+ lines changed):** before reviewing, run the "Pre-Step: Ensure Dual Review Setup" from `ship-major-feature.md` to bump required reviews to 2 and verify both reviewer bots are collaborators. Then run `/cage-match $PR_NUMBER`. After merging, run the "Post-Merge: Restore Branch Protection" step from `ship-major-feature.md` to restore required reviews back to 1.
 
 **Otherwise:** run `/pr-review $PR_NUMBER`
 
@@ -490,7 +490,14 @@ Before proceeding at each step, verify:
   ```bash
   DISMISS_STALE=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews 2>/dev/null | jq '.dismiss_stale_reviews')
   ```
-  If `DISMISS_STALE` is not `true`, fetch the full existing protection config and re-PUT it with `dismiss_stale_reviews=true` (same fetch-then-replay pattern as ship-major-feature.md Pre-Step to preserve all other settings)
+  If `DISMISS_STALE` is not `true`, use the targeted PATCH endpoint to update just the review settings without touching other protection rules:
+  ```bash
+  curl -s -X PATCH \
+    -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
+    -d '{"dismiss_stale_reviews":true}'
+  ```
 - Add collaborator if missing
 - Mark as initialized
 
