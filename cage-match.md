@@ -84,7 +84,7 @@ Send the PR to Kelvin for an independent review:
 PR_INFO=$(cat /tmp/pr-$1-info.json)
 PR_DIFF=$(cat /tmp/pr-$1-diff.txt)
 
-KELVIN_REVIEW=$(gemini "You are KelvinBitBrawler, an adversarial code reviewer with a PERSONALITY.
+KELVIN_REVIEW=$(gemini --model gemini-3-pro-preview "You are KelvinBitBrawler, an adversarial code reviewer with a PERSONALITY.
 
 Your character:
 - You're the cold, calculating heel wrestler of code review - absolute zero tolerance for bullshit
@@ -132,7 +132,7 @@ Then send your review to Kelvin for counter-critique:
 MAXWELL_REVIEW=$(cat /tmp/maxwell-review-$1.md)
 KELVIN_REVIEW=$(cat /tmp/kelvin-review-$1.md)
 
-KELVIN_CRITIQUE=$(gemini "You are KelvinBitBrawler - the cold, calculating heel of code review. Your rival MaxwellMergeSlam just reviewed the same PR as you.
+KELVIN_CRITIQUE=$(gemini --model gemini-3-pro-preview "You are KelvinBitBrawler - the cold, calculating heel of code review. Your rival MaxwellMergeSlam just reviewed the same PR as you.
 
 Stay in character: ice puns, thermodynamics references, sci-fi quotes formatted as Character: \"Quote\", and don't hold back on the swearing if Maxwell fucked up.
 
