@@ -410,9 +410,23 @@ If approved:
    gh pr checks $PR_NUMBER
    ```
 
-2. If CI passes (or no required checks), merge:
+2. If CI passes (or no required checks), check for stacked PRs before merging:
    ```bash
-   gh pr merge $PR_NUMBER --squash --delete-branch
+   # Check if any open PRs use this branch as their base (stacked PRs)
+   PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName -q '.headRefName')
+   DOWNSTREAM_PRS=$(gh pr list --base "$PR_BRANCH" --json number -q '.[].number' 2>/dev/null)
+
+   if [ -n "$DOWNSTREAM_PRS" ]; then
+     # Stacked PRs exist — merge WITHOUT deleting branch, retarget downstream, then delete
+     gh pr merge $PR_NUMBER --squash
+     for downstream in $DOWNSTREAM_PRS; do
+       gh pr edit $downstream --base $BASE_BRANCH
+     done
+     git push origin --delete "$PR_BRANCH" 2>/dev/null || true
+   else
+     # No stacked PRs — safe to delete branch on merge
+     gh pr merge $PR_NUMBER --squash --delete-branch
+   fi
    ```
 
 3. Report success with the merged PR URL.
@@ -468,6 +482,12 @@ Before proceeding at each step, verify:
 - Push new commits to existing PR
 - Re-review if there are new changes
 - Proceed to merge if approved
+
+**Multiple PRs (stacked):**
+- When shipping multiple related PRs that are stacked (each PR's base is the previous PR's branch), merge them in order
+- Before deleting a merged branch, check if any open PRs use it as their base
+- If so: merge without `--delete-branch`, retarget downstream PRs to the base branch (e.g., `main`), then delete the branch
+- This prevents downstream PRs from being auto-closed by GitHub when their base branch disappears
 
 **No CLAUDE_REVIEWER_PAT:**
 - Skip the formal review posting
