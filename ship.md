@@ -230,7 +230,14 @@ fi
    coverage-threshold: 50
    ```
 
-5. **Set up branch protection** (if missing):
+5. **Enable auto-merge** on the repository:
+   ```bash
+   gh api repos/$REPO -X PATCH -f allow_auto_merge=true
+   ```
+   This allows PRs to be queued for merge while CI is still running, avoiding the need
+   for `--admin` overrides.
+
+6. **Set up branch protection** (if missing):
 
    If CI was created, require it to pass:
    ```bash
@@ -255,7 +262,7 @@ fi
      -f "restrictions=null"
    ```
 
-6. **Create initialization marker:**
+7. **Create initialization marker:**
    ```bash
    mkdir -p .claude
    echo "initialized=$(date -Iseconds)" > .claude/ship-initialized
@@ -410,24 +417,38 @@ If approved:
    gh pr checks $PR_NUMBER
    ```
 
-2. If CI passes (or no required checks), check for stacked PRs before merging:
+2. Check for stacked PRs:
    ```bash
-   # Check if any open PRs use this branch as their base (stacked PRs)
    PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName -q '.headRefName')
    DOWNSTREAM_PRS=$(gh pr list --base "$PR_BRANCH" --json number -q '.[].number' 2>/dev/null)
+   ```
 
+3. Attempt the merge. If branch protection blocks it (CI still running), use `--auto`
+   to queue the merge for when CI passes. **Only reach this point after the pre-merge
+   gate (Step 8) is fully satisfied** — the user has reviewed all suggestions and
+   given the go-ahead.
+   ```bash
    if [ -n "$DOWNSTREAM_PRS" ]; then
      # Stacked PRs exist — merge WITHOUT deleting branch, retarget downstream, then delete
-     gh pr merge $PR_NUMBER --squash
+     if ! gh pr merge $PR_NUMBER --squash 2>/dev/null; then
+       echo "CI pending — queuing auto-merge..."
+       gh pr merge $PR_NUMBER --squash --auto
+     fi
      for downstream in $DOWNSTREAM_PRS; do
        gh pr edit $downstream --base $BASE_BRANCH
      done
      git push origin --delete "$PR_BRANCH" 2>/dev/null || true
    else
      # No stacked PRs — safe to delete branch on merge
-     gh pr merge $PR_NUMBER --squash --delete-branch
+     if ! gh pr merge $PR_NUMBER --squash --delete-branch 2>/dev/null; then
+       echo "CI pending — queuing auto-merge..."
+       gh pr merge $PR_NUMBER --squash --delete-branch --auto
+     fi
    fi
    ```
+   The `--auto` flag is only used as a fallback when the immediate merge fails due to
+   pending CI. By this point the user has already reviewed all feedback (Step 8), so
+   the only remaining gate is CI completing.
 
 3. Report success with the merged PR URL.
 
