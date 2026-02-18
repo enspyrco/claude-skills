@@ -167,27 +167,21 @@ Based on both reviews and critiques, synthesize a final assessment:
 Post Maxwell's review:
 
 ```bash
-MAXWELL_BODY=$(cat /tmp/maxwell-review-$1.md | jq -Rs .)
 MAXWELL_VERDICT="COMMENT"  # Set based on your verdict: APPROVE, REQUEST_CHANGES, or COMMENT
 
-curl -s -X POST \
-  -H "Authorization: Bearer $MAXWELL_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$1/reviews" \
-  -d "{\"body\": $MAXWELL_BODY, \"event\": \"$MAXWELL_VERDICT\"}"
+GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+  -f body="$(cat /tmp/maxwell-review-$1.md)" \
+  -f event="$MAXWELL_VERDICT"
 ```
 
 Post Kelvin's review:
 
 ```bash
-KELVIN_BODY=$(cat /tmp/kelvin-review-$1.md | jq -Rs .)
 KELVIN_VERDICT="COMMENT"  # Extract from Kelvin's review
 
-curl -s -X POST \
-  -H "Authorization: Bearer $KELVIN_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$1/reviews" \
-  -d "{\"body\": $KELVIN_BODY, \"event\": \"$KELVIN_VERDICT\"}"
+GH_TOKEN=$KELVIN_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+  -f body="$(cat /tmp/kelvin-review-$1.md)" \
+  -f event="$KELVIN_VERDICT"
 ```
 
 ## Summary

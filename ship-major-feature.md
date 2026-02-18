@@ -34,11 +34,8 @@ CURRENT_REVIEW_COUNT=$(echo "$PR_REVIEW_CONFIG" | jq '.required_approving_review
 If `CURRENT_REVIEW_COUNT` is not `2`, use the targeted PATCH endpoint (not the full PUT, which can fail on scoped tokens and risks clobbering other protection settings):
 
 ```bash
-curl -s -X PATCH \
-  -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
-  -d '{"required_approving_review_count":2,"dismiss_stale_reviews":true}'
+GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH \
+  -F required_approving_review_count=2 -F dismiss_stale_reviews=true
 ```
 
 3. **Update initialization marker:**
@@ -69,11 +66,8 @@ This sends the PR through both Maxwell (Claude) and Kelvin (Gemini) for independ
 After merging, restore required reviews back to 1 so normal `/ship` PRs aren't blocked:
 
 ```bash
-curl -s -X PATCH \
-  -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
-  -d '{"required_approving_review_count":1,"dismiss_stale_reviews":true}'
+GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH \
+  -F required_approving_review_count=1 -F dismiss_stale_reviews=true
 ```
 
 **Important:** Always use the targeted `PATCH .../required_pull_request_reviews` endpoint, not the full `PUT .../protection`. The full PUT requires broader token scopes and risks clobbering other protection settings (status checks, restrictions, etc.).
