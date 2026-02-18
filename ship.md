@@ -139,29 +139,17 @@ fi
    # Invite reviewers (requires admin PAT)
    if [ -n "$ENSPYR_ADMIN_PAT" ]; then
      # Invite MaxwellMergeSlam
-     curl -s -X PUT \
-       -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
-       -H "Accept: application/vnd.github+json" \
-       "https://api.github.com/repos/$REPO/collaborators/MaxwellMergeSlam" \
-       -d '{"permission":"push"}'
+     GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/collaborators/MaxwellMergeSlam --method PUT -f permission=push
 
      # Invite KelvinBitBrawler
-     curl -s -X PUT \
-       -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
-       -H "Accept: application/vnd.github+json" \
-       "https://api.github.com/repos/$REPO/collaborators/KelvinBitBrawler" \
-       -d '{"permission":"push"}'
+     GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/collaborators/KelvinBitBrawler --method PUT -f permission=push
 
      # Accept invitations
-     MAXWELL_INVITE=$(curl -s -H "Authorization: Bearer $MAXWELL_PAT" \
-       "https://api.github.com/user/repository_invitations" | jq -r ".[] | select(.repository.full_name==\"$REPO\") | .id")
-     [ -n "$MAXWELL_INVITE" ] && curl -s -X PATCH -H "Authorization: Bearer $MAXWELL_PAT" \
-       "https://api.github.com/user/repository_invitations/$MAXWELL_INVITE"
+     MAXWELL_INVITE=$(GH_TOKEN=$MAXWELL_PAT gh api user/repository_invitations --jq ".[] | select(.repository.full_name==\"$REPO\") | .id")
+     [ -n "$MAXWELL_INVITE" ] && GH_TOKEN=$MAXWELL_PAT gh api user/repository_invitations/$MAXWELL_INVITE --method PATCH
 
-     KELVIN_INVITE=$(curl -s -H "Authorization: Bearer $KELVIN_PAT" \
-       "https://api.github.com/user/repository_invitations" | jq -r ".[] | select(.repository.full_name==\"$REPO\") | .id")
-     [ -n "$KELVIN_INVITE" ] && curl -s -X PATCH -H "Authorization: Bearer $KELVIN_PAT" \
-       "https://api.github.com/user/repository_invitations/$KELVIN_INVITE"
+     KELVIN_INVITE=$(GH_TOKEN=$KELVIN_PAT gh api user/repository_invitations --jq ".[] | select(.repository.full_name==\"$REPO\") | .id")
+     [ -n "$KELVIN_INVITE" ] && GH_TOKEN=$KELVIN_PAT gh api user/repository_invitations/$KELVIN_INVITE --method PATCH
    else
      echo "Note: ENSPYR_ADMIN_PAT not set. Ask a repo admin to add MaxwellMergeSlam and KelvinBitBrawler as collaborators."
    fi
@@ -533,11 +521,7 @@ Before proceeding at each step, verify:
   ```
   If `DISMISS_STALE` is not `true`, use the targeted PATCH endpoint to update just the review settings without touching other protection rules:
   ```bash
-  curl -s -X PATCH \
-    -H "Authorization: Bearer $ENSPYR_ADMIN_PAT" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews" \
-    -d '{"dismiss_stale_reviews":true}'
+  GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH -F dismiss_stale_reviews=true
   ```
 - Add collaborator if missing
 - Mark as initialized

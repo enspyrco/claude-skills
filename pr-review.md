@@ -115,14 +115,9 @@ Then post the review using the GitHub API:
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
 # Post review as claude-reviewer
-curl -s -X POST \
-  -H "Authorization: Bearer $MAXWELL_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$1/reviews" \
-  -d '{
-    "body": "REVIEW_BODY",
-    "event": "APPROVE|REQUEST_CHANGES|COMMENT"
-  }'
+GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+  -f body="REVIEW_BODY" \
+  -f event="APPROVE|REQUEST_CHANGES|COMMENT"
 ```
 
 Events:

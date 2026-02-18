@@ -117,29 +117,20 @@ For each comment, post an appropriate response:
 
 **If fixed:**
 ```bash
-curl -s -X POST \
-  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies" \
-  -d '{"body": "Fixed in the latest commit. [describe what was changed]"}'
+GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+  -f body="Fixed in the latest commit. [describe what was changed]"
 ```
 
 **If skipped (with reason):**
 ```bash
-curl -s -X POST \
-  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies" \
-  -d '{"body": "Acknowledged - [explanation of why not fixing]. [optional: alternative approach taken]"}'
+GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+  -f body="Acknowledged - [explanation of why not fixing]. [optional: alternative approach taken]"
 ```
 
 **If needs discussion:**
 ```bash
-curl -s -X POST \
-  -H "Authorization: Bearer $CLAUDE_REVIEWER_PAT" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies" \
-  -d '{"body": "[Question or request for clarification]"}'
+GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+  -f body="[Question or request for clarification]"
 ```
 
 ### Step 6: Create Commit (if changes made)
