@@ -90,7 +90,7 @@ Coverage thresholds are owned by the project's test runner config (e.g., `vitest
 
 ## Prerequisites
 
-Source environment variables:
+Source environment variables. **IMPORTANT:** Each Bash tool invocation runs in a fresh shell, so you must re-source in every bash call that uses PAT variables (`MAXWELL_PAT`, `KELVIN_PAT`, `ENSPYR_ADMIN_PAT`). The safest pattern is to inline the `source` at the top of any bash block that references these variables.
 
 ```bash
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null

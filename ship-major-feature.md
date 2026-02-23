@@ -31,9 +31,12 @@ PR_REVIEW_CONFIG=$(gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_
 CURRENT_REVIEW_COUNT=$(echo "$PR_REVIEW_CONFIG" | jq '.required_approving_review_count')
 ```
 
-If `CURRENT_REVIEW_COUNT` is not `2`, use the targeted PATCH endpoint (not the full PUT, which can fail on scoped tokens and risks clobbering other protection settings):
+If `CURRENT_REVIEW_COUNT` is not `2`, use the targeted PATCH endpoint (not the full PUT, which can fail on scoped tokens and risks clobbering other protection settings). Re-source env in same call since each Bash invocation gets a fresh shell:
 
 ```bash
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+BASE_BRANCH=$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name')
 GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH \
   -F required_approving_review_count=2 -F dismiss_stale_reviews=true
 ```
@@ -63,9 +66,12 @@ This sends the PR through both Maxwell (Claude) and Kelvin (Gemini) for independ
 
 ## Post-Merge: Restore Branch Protection
 
-After merging, restore required reviews back to 1 so normal `/ship` PRs aren't blocked:
+After merging, restore required reviews back to 1 so normal `/ship` PRs aren't blocked. Re-source env since this is a new shell:
 
 ```bash
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+BASE_BRANCH=$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name')
 GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH \
   -F required_approving_review_count=1 -F dismiss_stale_reviews=true
 ```

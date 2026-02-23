@@ -11,15 +11,10 @@ Two AI reviewers enter. One PR leaves (hopefully improved).
 
 ## Setup
 
-Source the environment:
+Source the environment and get repo info. **IMPORTANT:** Each Bash tool invocation runs in a fresh shell, so you must re-source in every bash call that uses PAT variables (`MAXWELL_PAT`, `KELVIN_PAT`).
 
 ```bash
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
-```
-
-Get repo info:
-
-```bash
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 ```
 
@@ -164,9 +159,11 @@ Based on both reviews and critiques, synthesize a final assessment:
 
 ## Round 6: Post Reviews to GitHub
 
-Post Maxwell's review:
+Post Maxwell's review (source env in same call):
 
 ```bash
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 MAXWELL_VERDICT="COMMENT"  # Set based on your verdict: APPROVE, REQUEST_CHANGES, or COMMENT
 
 GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
@@ -174,9 +171,11 @@ GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f event="$MAXWELL_VERDICT"
 ```
 
-Post Kelvin's review:
+Post Kelvin's review (source env in same call):
 
 ```bash
+source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 KELVIN_VERDICT="COMMENT"  # Extract from Kelvin's review
 
 GH_TOKEN=$KELVIN_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \

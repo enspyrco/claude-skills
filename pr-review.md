@@ -102,15 +102,11 @@ Apply any local review criteria in addition to the standard review process.
 
 **IMPORTANT:** Always post reviews as **claude-reviewer** using the `MAXWELL_PAT` environment variable.
 
-First, source the environment file if not already loaded:
+Post the review using the GitHub API. The `source` and `GH_TOKEN=` usage **must be in the same bash call** — each Bash tool invocation runs in a fresh shell, so env vars from a prior call won't persist.
 
 ```bash
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
-```
 
-Then post the review using the GitHub API:
-
-```bash
 # Get the repo owner and name
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
