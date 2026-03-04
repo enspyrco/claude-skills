@@ -100,7 +100,7 @@ Apply any local review criteria in addition to the standard review process.
 
 ## Posting the Review
 
-**IMPORTANT:** Always post reviews as **claude-reviewer** using the `MAXWELL_PAT` environment variable.
+**IMPORTANT:** Always post reviews as **MaxwellMergeSlam [bot]** using a GitHub App installation token.
 
 First, source the environment file if not already loaded:
 
@@ -108,14 +108,17 @@ First, source the environment file if not already loaded:
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 ```
 
-Then post the review using the GitHub API:
+Then generate an App token and post the review using the GitHub API:
 
 ```bash
 # Get the repo owner and name
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
-# Post review as claude-reviewer
-GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+# Generate a short-lived installation token for MaxwellMergeSlam
+MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
+
+# Post review as MaxwellMergeSlam [bot]
+GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="REVIEW_BODY" \
   -f event="APPROVE|REQUEST_CHANGES|COMMENT"
 ```

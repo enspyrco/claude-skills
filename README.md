@@ -4,7 +4,7 @@ Claude Code skills for AI-assisted development.
 
 ## Team Member Setup
 
-Three steps to get started:
+Four steps to get started:
 
 ```bash
 # 1. Clone the repo
@@ -14,10 +14,18 @@ git clone git@github.com:enspyrco/claude-skills.git
 cd claude-skills
 ln -s "$(pwd)"/*.md ~/.claude/commands/
 
-# 3. Create .env with shared PATs (get from team lead)
-cp .env.example .env
-# Edit .env with actual PAT values
+# 3. Symlink the helper script
+mkdir -p ~/.enspyr-claude-skills
+ln -s "$(pwd)/scripts/github-app-token.sh" ~/.enspyr-claude-skills/github-app-token.sh
+
+# 4. Create .env with App credentials (get from team lead)
+cp .env.example ~/.enspyr-claude-skills/.env
+# Edit ~/.enspyr-claude-skills/.env with actual values
 ```
+
+Then install the reviewer GitHub Apps on your repos (one-time per repo):
+- [Install MaxwellMergeSlam](https://github.com/apps/maxwellmergeslam/installations/new)
+- [Install KelvinBitBrawler](https://github.com/apps/kelvinbitbrawler/installations/new)
 
 That's it. Skills are now available as `/pr-review`, `/ship`, `/cage-match`, etc.
 
@@ -28,8 +36,8 @@ That's it. Skills are now available as `/pr-review`, `/ship`, `/cage-match`, etc
 | Skill | Description |
 |-------|-------------|
 | `/ship` | Commit, push, create PR, review, and merge |
-| `/pr-review <pr>` | Code review as MaxwellMergeSlam (Claude) |
-| `/cage-match <pr>` | Adversarial review: Maxwell vs Kelvin (Gemini) |
+| `/pr-review <pr>` | Code review as MaxwellMergeSlam [bot] (Claude) |
+| `/cage-match <pr>` | Adversarial review: Maxwell [bot] vs Kelvin [bot] (Gemini) |
 | `/review-respond` | Address PR review comments |
 | `/pm` | Project management (issues, boards) |
 | `/research` | Deep research with web search |
@@ -44,7 +52,7 @@ Add `CLAUDE_PM_PAT` to your `.env` (PAT for claude-pm-enspyr account).
 Requires Google OAuth setup - see `.env.example` for details.
 
 ### Admin: Setting up new repos
-If you have `ENSPYR_ADMIN_PAT`, `/ship` will automatically invite reviewers as collaborators on new repos. Team members don't need this.
+If you have `ENSPYR_ADMIN_PAT`, `/ship` will automatically configure branch protection on new repos. Team members don't need this — they just need to install the reviewer Apps on their repos.
 
 ## License
 

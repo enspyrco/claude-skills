@@ -136,11 +136,13 @@ npx claude-slides --config test.json
 The `.env` file (not committed) should contain:
 
 ```bash
-# For /ship, /pr-review, /cage-match - GitHub PATs for AI reviewers
-MAXWELL_PAT=ghp_...   # MaxwellMergeSlam (Claude reviewer)
-KELVIN_PAT=ghp_...    # KelvinBitBrawler (Gemini reviewer)
+# For /ship, /pr-review, /cage-match - GitHub App credentials for AI reviewers
+MAXWELL_APP_ID=123456                    # MaxwellMergeSlam App (Claude reviewer)
+MAXWELL_PRIVATE_KEY_B64=base64-pem...    # base64-encoded private key
+KELVIN_APP_ID=789012                     # KelvinBitBrawler App (Gemini reviewer)
+KELVIN_PRIVATE_KEY_B64=base64-pem...     # base64-encoded private key
 
-# For /ship - admin PAT to invite reviewers as collaborators (optional, admin-only)
+# For /ship - admin PAT for branch protection setup (optional, admin-only)
 ENSPYR_ADMIN_PAT=ghp_...
 
 # For /pm skill - GitHub PAT for project management bot
@@ -151,7 +153,7 @@ GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 ```
 
-Skills source this file from `.env` in the repo root (or `~/.claude/commands/.env` if installed globally).
+Skills source this file from `.env` in the repo root (or `~/.enspyr-claude-skills/.env`). App tokens are generated on-the-fly via `scripts/github-app-token.sh` (short-lived, 1-hour TTL).
 
 ## Available Skills
 
@@ -179,10 +181,10 @@ Skills source this file from `.env` in the repo root (or `~/.claude/commands/.en
 5. Summary of agreements/disagreements provided
 
 **Reviewers:**
-- **MaxwellMergeSlam** - Claude instance (uses `MAXWELL_PAT`)
-- **KelvinBitBrawler** - Gemini instance (uses `KELVIN_PAT`)
+- **MaxwellMergeSlam [bot]** - Claude instance (GitHub App, uses `MAXWELL_APP_ID` + `MAXWELL_PRIVATE_KEY_B64`)
+- **KelvinBitBrawler [bot]** - Gemini instance (GitHub App, uses `KELVIN_APP_ID` + `KELVIN_PRIVATE_KEY_B64`)
 
-**Setup:** Add both PATs to `.env`. Requires Gemini CLI installed (`brew install gemini` or similar).
+**Setup:** Add App credentials to `.env`, install both GitHub Apps on your repos, and symlink the helper script. Requires Gemini CLI installed (`brew install gemini` or similar).
 
 ## Development Workflow
 
@@ -194,7 +196,7 @@ This repo uses `/ship` for all changes:
    - CI must pass (tests + coverage thresholds)
 
 2. **First run in a new repo**: `/ship` auto-configures:
-   - Adds MaxwellMergeSlam and KelvinBitBrawler as collaborators
+   - Verifies MaxwellMergeSlam and KelvinBitBrawler Apps are installed
    - Sets up branch protection
    - Creates `.claude/ship-initialized` marker
 
