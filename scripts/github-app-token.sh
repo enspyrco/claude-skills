@@ -70,6 +70,14 @@ SIGNATURE=$(printf '%s' "$UNSIGNED" \
 JWT="${UNSIGNED}.${SIGNATURE}"
 
 # ---------------------------------------------------------------------------
+# Look up App slug (for install URL in error messages)
+# ---------------------------------------------------------------------------
+APP_SLUG=$(curl -sf \
+  -H "Authorization: Bearer $JWT" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/app" 2>/dev/null | jq -r '.slug // empty')
+
+# ---------------------------------------------------------------------------
 # Look up installation ID for the target repo
 # ---------------------------------------------------------------------------
 INSTALL_RESPONSE=$(curl -sf \
@@ -77,7 +85,9 @@ INSTALL_RESPONSE=$(curl -sf \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/${REPO}/installation" 2>&1) || {
   echo "Error: App is not installed on ${REPO}." >&2
-  echo "Install it at: https://github.com/apps/$(echo "$APP_ID" | tr '[:upper:]' '[:lower:]')/installations/new" >&2
+  if [ -n "$APP_SLUG" ]; then
+    echo "Install it at: https://github.com/apps/${APP_SLUG}/installations/new" >&2
+  fi
   exit 3
 }
 
