@@ -3,4 +3,5 @@ dist/
 coverage/
 .env
 *.log
+*.pem
 .claude/live-qa-config.md

@@ -11,18 +11,27 @@ Follow the `/ship` workflow (see ship.md) with the following overrides:
 
 **Always run this before Step 0**, regardless of whether `.claude/ship-initialized` exists.
 
-1. **Check both reviewers are collaborators:**
+1. **Verify both reviewer Apps are installed:**
 
 ```bash
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 BASE_BRANCH=$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name')
 
-MAXWELL_IS_COLLAB=$(gh api repos/$REPO/collaborators/MaxwellMergeSlam 2>/dev/null && echo "yes" || echo "no")
-KELVIN_IS_COLLAB=$(gh api repos/$REPO/collaborators/KelvinBitBrawler 2>/dev/null && echo "yes" || echo "no")
+# Check that both GitHub Apps are installed on this repo
+MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO" 2>/dev/null) && echo "MaxwellMergeSlam App: installed" || echo "MaxwellMergeSlam App: NOT installed"
+KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO" 2>/dev/null) && echo "KelvinBitBrawler App: installed" || echo "KelvinBitBrawler App: NOT installed"
 ```
 
-If either is missing and `ENSPYR_ADMIN_PAT` is available, invite and accept (same as ship.md Step 0). If no admin PAT, warn the user.
+If either App is not installed, print the install URL and stop:
+```bash
+if [ -z "$MAXWELL_TOKEN" ] || [ -z "$KELVIN_TOKEN" ]; then
+  echo "Both reviewer GitHub Apps must be installed for cage match."
+  [ -z "$MAXWELL_TOKEN" ] && echo "  Install MaxwellMergeSlam: https://github.com/apps/maxwellmergeslam/installations/new"
+  [ -z "$KELVIN_TOKEN" ] && echo "  Install KelvinBitBrawler: https://github.com/apps/kelvinbitbrawler/installations/new"
+  exit 1
+fi
+```
 
 2. **Bump required reviews to 2 for the cage match:**
 

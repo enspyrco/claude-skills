@@ -164,12 +164,20 @@ Based on both reviews and critiques, synthesize a final assessment:
 
 ## Round 6: Post Reviews to GitHub
 
+Generate App tokens and post both reviews:
+
+```bash
+# Generate short-lived installation tokens for both reviewer Apps
+MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
+KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO")
+```
+
 Post Maxwell's review:
 
 ```bash
 MAXWELL_VERDICT="COMMENT"  # Set based on your verdict: APPROVE, REQUEST_CHANGES, or COMMENT
 
-GH_TOKEN=$MAXWELL_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="$(cat /tmp/maxwell-review-$1.md)" \
   -f event="$MAXWELL_VERDICT"
 ```
@@ -179,7 +187,7 @@ Post Kelvin's review:
 ```bash
 KELVIN_VERDICT="COMMENT"  # Extract from Kelvin's review
 
-GH_TOKEN=$KELVIN_PAT gh api repos/$REPO/pulls/$1/reviews --method POST \
+GH_TOKEN=$KELVIN_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="$(cat /tmp/kelvin-review-$1.md)" \
   -f event="$KELVIN_VERDICT"
 ```

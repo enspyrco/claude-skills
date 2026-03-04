@@ -119,39 +119,29 @@ else
 fi
 ```
 
-**If not initialized**, set up branch protection and collaborators:
+**If not initialized**, set up branch protection and verify App installations:
 
 1. **Check current branch protection:**
    ```bash
    gh api repos/$REPO/branches/$BASE_BRANCH/protection 2>/dev/null
    ```
 
-2. **Add reviewers as collaborators** (if not already):
+2. **Verify reviewer Apps are installed** on this repo:
 
-   First check if reviewers are already collaborators:
    ```bash
-   MAXWELL_IS_COLLAB=$(gh api repos/$REPO/collaborators/MaxwellMergeSlam 2>/dev/null && echo "yes" || echo "no")
-   KELVIN_IS_COLLAB=$(gh api repos/$REPO/collaborators/KelvinBitBrawler 2>/dev/null && echo "yes" || echo "no")
+   # Check that MaxwellMergeSlam and KelvinBitBrawler GitHub Apps are installed
+   MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO" 2>/dev/null) && echo "MaxwellMergeSlam App: installed" || echo "MaxwellMergeSlam App: NOT installed"
+   KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO" 2>/dev/null) && echo "KelvinBitBrawler App: installed" || echo "KelvinBitBrawler App: NOT installed"
    ```
 
-   If reviewers need to be added and `ENSPYR_ADMIN_PAT` is available, invite and accept:
+   If either App is not installed, print the install URL and stop:
    ```bash
-   # Invite reviewers (requires admin PAT)
-   if [ -n "$ENSPYR_ADMIN_PAT" ]; then
-     # Invite MaxwellMergeSlam
-     GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/collaborators/MaxwellMergeSlam --method PUT -f permission=push
-
-     # Invite KelvinBitBrawler
-     GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/collaborators/KelvinBitBrawler --method PUT -f permission=push
-
-     # Accept invitations
-     MAXWELL_INVITE=$(GH_TOKEN=$MAXWELL_PAT gh api user/repository_invitations --jq ".[] | select(.repository.full_name==\"$REPO\") | .id")
-     [ -n "$MAXWELL_INVITE" ] && GH_TOKEN=$MAXWELL_PAT gh api user/repository_invitations/$MAXWELL_INVITE --method PATCH
-
-     KELVIN_INVITE=$(GH_TOKEN=$KELVIN_PAT gh api user/repository_invitations --jq ".[] | select(.repository.full_name==\"$REPO\") | .id")
-     [ -n "$KELVIN_INVITE" ] && GH_TOKEN=$KELVIN_PAT gh api user/repository_invitations/$KELVIN_INVITE --method PATCH
-   else
-     echo "Note: ENSPYR_ADMIN_PAT not set. Ask a repo admin to add MaxwellMergeSlam and KelvinBitBrawler as collaborators."
+   if [ -z "$MAXWELL_TOKEN" ] || [ -z "$KELVIN_TOKEN" ]; then
+     echo "Reviewer GitHub Apps must be installed on this repo."
+     [ -z "$MAXWELL_TOKEN" ] && echo "  Install MaxwellMergeSlam: https://github.com/apps/maxwellmergeslam/installations/new"
+     [ -z "$KELVIN_TOKEN" ] && echo "  Install KelvinBitBrawler: https://github.com/apps/kelvinbitbrawler/installations/new"
+     echo "After installing, re-run /ship."
+     exit 1
    fi
    ```
 
@@ -262,7 +252,7 @@ fi
    ```
 
 **Report setup status:**
-- [x] Added claude-reviewer-max as collaborator
+- [x] Verified reviewer Apps installed (MaxwellMergeSlam + KelvinBitBrawler)
 - [x] CI: created/skipped/existing (based on config)
 - [x] Enabled branch protection (1 required review, +CI if applicable)
 - [x] Created .claude/ship-initialized marker
@@ -392,7 +382,7 @@ CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
 CHANGED_LINES=$(gh pr view $PR_NUMBER --json additions,deletions --jq '.additions + .deletions')
 ```
 
-**If large change (10+ files or 500+ lines changed):** before reviewing, run the "Pre-Step: Ensure Dual Review Setup" from `ship-major-feature.md` to bump required reviews to 2 and verify both reviewer bots are collaborators. Then run `/cage-match $PR_NUMBER`. After merging, run the "Post-Merge: Restore Branch Protection" step from `ship-major-feature.md` to restore required reviews back to 1.
+**If large change (10+ files or 500+ lines changed):** before reviewing, run the "Pre-Step: Ensure Dual Review Setup" from `ship-major-feature.md` to bump required reviews to 2 and verify both reviewer Apps are installed. Then run `/cage-match $PR_NUMBER`. After merging, run the "Post-Merge: Restore Branch Protection" step from `ship-major-feature.md` to restore required reviews back to 1.
 
 **Otherwise:** run `/pr-review $PR_NUMBER`
 
@@ -532,20 +522,21 @@ Before proceeding at each step, verify:
 - Prefer merging the smaller/simpler PR first — this minimizes the conflict surface for the larger PR
 - If both PRs make the same change (e.g., a shared bug fix), consider extracting that change into its own micro-PR, merging it first, then rebasing both feature branches
 
-**No CLAUDE_REVIEWER_PAT:**
+**Reviewer App not installed:**
 - Skip the formal review posting
 - Still analyze the code and report findings
 - Proceed to merge if self-review looks good (with warning)
+- Print the App install URL so the user can fix it for next time
 
 **Cannot set up branch protection (not repo admin):**
 - Skip the setup step
 - Warn that reviews won't be enforced
 - Still post advisory reviews and proceed
 
-**Reviewers not set up and no ENSPYR_ADMIN_PAT:**
-- Check if MaxwellMergeSlam/KelvinBitBrawler are already collaborators
-- If not, and no admin PAT available, warn user to ask repo admin
-- Reviews can still be posted but won't count for branch protection until reviewers have write access
+**Reviewer Apps not installed and no admin access:**
+- Run `github-app-token.sh` to check — if it fails, the App isn't installed
+- Print the GitHub App install URLs for the user
+- Reviews can still be posted once Apps are installed (one-time setup per repo)
 
 **Repo already has branch protection:**
 - Don't modify existing rules, except: verify `dismiss_stale_reviews` is enabled
@@ -557,7 +548,7 @@ Before proceeding at each step, verify:
   ```bash
   GH_TOKEN=$ENSPYR_ADMIN_PAT gh api repos/$REPO/branches/$BASE_BRANCH/protection/required_pull_request_reviews --method PATCH -F dismiss_stale_reviews=true
   ```
-- Add collaborator if missing
+- Verify Apps installed
 - Mark as initialized
 
 ## Interactive Mode

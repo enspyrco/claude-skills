@@ -39,6 +39,9 @@ if [ -n "$ARGUMENTS" ]; then
 else
   PR_NUMBER=$(gh pr view --json number -q '.number' 2>/dev/null)
 fi
+
+# Generate a short-lived installation token for MaxwellMergeSlam (used to post comment replies)
+MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
 ```
 
 ## Workflow
@@ -117,19 +120,19 @@ For each comment, post an appropriate response:
 
 **If fixed:**
 ```bash
-GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
   -f body="Fixed in the latest commit. [describe what was changed]"
 ```
 
 **If skipped (with reason):**
 ```bash
-GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
   -f body="Acknowledged - [explanation of why not fixing]. [optional: alternative approach taken]"
 ```
 
 **If needs discussion:**
 ```bash
-GH_TOKEN=$CLAUDE_REVIEWER_PAT gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
+GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --method POST \
   -f body="[Question or request for clarification]"
 ```
 
@@ -207,9 +210,9 @@ gh api repos/$REPO/pulls/$PR_NUMBER/requested_reviewers \
 - Note that the code has changed
 - Ask if the concern is still relevant
 
-**No CLAUDE_REVIEWER_PAT:**
+**MaxwellMergeSlam App not installed:**
 - Still gather decisions and make fixes
-- Skip posting responses (warn user)
+- Skip posting responses (warn user, print App install URL)
 - Provide suggested responses for user to post manually
 
 **Comment thread (replies):**
