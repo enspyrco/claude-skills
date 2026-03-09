@@ -172,20 +172,18 @@ MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$
 KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO")
 ```
 
-Post Maxwell's review:
+Post Maxwell's review — **always as COMMENT** since Maxwell is the PR author (created the PR via `/ship`) and cannot approve its own PRs:
 
 ```bash
-MAXWELL_VERDICT="COMMENT"  # Set based on your verdict: APPROVE, REQUEST_CHANGES, or COMMENT
-
 GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="$(cat /tmp/maxwell-review-$1.md)" \
-  -f event="$MAXWELL_VERDICT"
+  -f event="COMMENT"
 ```
 
-Post Kelvin's review:
+Post Kelvin's review — Kelvin is NOT the PR author, so it CAN approve:
 
 ```bash
-KELVIN_VERDICT="COMMENT"  # Extract from Kelvin's review
+KELVIN_VERDICT="COMMENT"  # Set based on Kelvin's verdict: APPROVE, REQUEST_CHANGES, or COMMENT
 
 GH_TOKEN=$KELVIN_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="$(cat /tmp/kelvin-review-$1.md)" \

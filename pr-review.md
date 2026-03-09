@@ -100,7 +100,7 @@ Apply any local review criteria in addition to the standard review process.
 
 ## Posting the Review
 
-**IMPORTANT:** Always post reviews as **MaxwellMergeSlam [bot]** using a GitHub App installation token.
+**IMPORTANT:** Always post reviews as **KelvinBitBrawler [bot]** using a GitHub App installation token. (MaxwellMergeSlam is the PR author when using `/ship`, so it cannot approve its own PRs.)
 
 First, source the environment file if not already loaded:
 
@@ -114,11 +114,11 @@ Then generate an App token and post the review using the GitHub API:
 # Get the repo owner and name
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
-# Generate a short-lived installation token for MaxwellMergeSlam
-MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
+# Generate a short-lived installation token for KelvinBitBrawler
+KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO")
 
-# Post review as MaxwellMergeSlam [bot]
-GH_TOKEN=$MAXWELL_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
+# Post review as KelvinBitBrawler [bot]
+GH_TOKEN=$KELVIN_TOKEN gh api repos/$REPO/pulls/$1/reviews --method POST \
   -f body="REVIEW_BODY" \
   -f event="APPROVE|REQUEST_CHANGES|COMMENT"
 ```
