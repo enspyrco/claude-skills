@@ -96,12 +96,16 @@ Source environment variables:
 source ~/.enspyr-claude-skills/.env 2>/dev/null || source .env 2>/dev/null
 ```
 
-Get repo info:
+Get repo info and generate bot token for PR creation:
 
 ```bash
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 BASE_BRANCH=$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name')
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Generate Maxwell App token — PRs are created as MaxwellMergeSlam [bot]
+# so the human developer can approve them
+MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
 ```
 
 ## Workflow
@@ -322,10 +326,10 @@ Check if a PR already exists for this branch:
 EXISTING_PR=$(gh pr view --json number -q '.number' 2>/dev/null || echo "")
 ```
 
-If no PR exists, create one:
+If no PR exists, create one **as the bot** so the human developer can approve:
 
 ```bash
-gh pr create --title "PR title based on changes" --body "$(cat <<'EOF'
+GH_TOKEN=$MAXWELL_TOKEN gh pr create --title "PR title based on changes" --body "$(cat <<'EOF'
 ## Summary
 - Brief description of changes
 
