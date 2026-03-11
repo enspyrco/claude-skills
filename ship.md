@@ -106,6 +106,9 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 # Generate Maxwell App token — PRs are created as MaxwellMergeSlam [bot]
 # so the human developer can approve them
 MAXWELL_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$MAXWELL_APP_ID" "$MAXWELL_PRIVATE_KEY_B64" "$REPO")
+
+# Generate Kelvin App token — Kelvin merges PRs after approval
+KELVIN_TOKEN=$(~/.enspyr-claude-skills/github-app-token.sh "$KELVIN_APP_ID" "$KELVIN_PRIVATE_KEY_B64" "$REPO")
 ```
 
 ## Workflow
@@ -394,11 +397,16 @@ Both will post review(s) to GitHub and return a verdict (APPROVE, REQUEST_CHANGE
 
 ### Step 7: Handle Review Feedback
 
+**STOP. Always present review feedback to the user before taking action.**
+
 **If the review verdict is REQUEST_CHANGES:**
 
-1. Automatically run `/review-respond $PR_NUMBER` to address each review comment
-2. Commit and push the fixes
-3. Re-request review and loop back to Step 6
+1. Show each review comment/change request to the user
+2. Ask the user: "Should I address these changes? Which ones do you want to fix?"
+3. Wait for the user's response before proceeding
+4. If the user agrees, run `/review-respond $PR_NUMBER` to address the agreed-upon comments
+5. Commit and push the fixes
+6. Re-request review and loop back to Step 6
 
 Repeat until the review verdict is APPROVE.
 
@@ -434,16 +442,16 @@ If approved:
    DOWNSTREAM_PRS=$(gh pr list --base "$PR_BRANCH" --json number -q '.[].number' 2>/dev/null)
    ```
 
-3. Attempt the merge. If branch protection blocks it (CI still running), use `--auto`
-   to queue the merge for when CI passes. **Only reach this point after the pre-merge
-   gate (Step 8) is fully satisfied** — the user has reviewed all suggestions and
-   given the go-ahead.
+3. Attempt the merge **as KelvinBitBrawler [bot]**. If branch protection blocks it
+   (CI still running), use `--auto` to queue the merge for when CI passes. **Only
+   reach this point after the pre-merge gate (Step 8) is fully satisfied** — the user
+   has reviewed all suggestions and given the go-ahead.
    ```bash
    if [ -n "$DOWNSTREAM_PRS" ]; then
      # Stacked PRs exist — merge WITHOUT deleting branch, retarget downstream, then delete
-     if ! gh pr merge $PR_NUMBER --squash 2>/dev/null; then
+     if ! GH_TOKEN=$KELVIN_TOKEN gh pr merge $PR_NUMBER --squash 2>/dev/null; then
        echo "CI pending — queuing auto-merge..."
-       gh pr merge $PR_NUMBER --squash --auto
+       GH_TOKEN=$KELVIN_TOKEN gh pr merge $PR_NUMBER --squash --auto
      fi
      for downstream in $DOWNSTREAM_PRS; do
        gh pr edit $downstream --base $BASE_BRANCH
@@ -451,9 +459,9 @@ If approved:
      git push origin --delete "$PR_BRANCH" 2>/dev/null || true
    else
      # No stacked PRs — safe to delete branch on merge
-     if ! gh pr merge $PR_NUMBER --squash --delete-branch 2>/dev/null; then
+     if ! GH_TOKEN=$KELVIN_TOKEN gh pr merge $PR_NUMBER --squash --delete-branch 2>/dev/null; then
        echo "CI pending — queuing auto-merge..."
-       gh pr merge $PR_NUMBER --squash --delete-branch --auto
+       GH_TOKEN=$KELVIN_TOKEN gh pr merge $PR_NUMBER --squash --delete-branch --auto
      fi
    fi
    ```
